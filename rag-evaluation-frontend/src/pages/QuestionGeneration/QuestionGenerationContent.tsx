@@ -39,7 +39,7 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
     isCompleted: false
   });
   const [currentTab, setCurrentTab] = useState<'upload' | 'chunks' | 'generate' | 'results'>('upload');
-  const [chunkSize, setChunkSize] = useState<number>(1000);
+  const [chunkSize, setChunkSize] = useState<number>(2048);
   const [isRechunking, setIsRechunking] = useState(false);
 
   // 修改状态，保存文件内容而不是File对象
@@ -47,6 +47,9 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
 
   // 添加分割方式状态
   const [splitterType, setSplitterType] = useState<SplitterType>('recursive');
+
+  // 在 state 区域添加分割策略模式
+  const [splitMode, setSplitMode] = useState<'langchain' | 'llamaindex'>('langchain');
 
   // 添加新状态用于展开/折叠功能和模态窗口
   const [expandedChunks, setExpandedChunks] = useState<Set<string>>(new Set());
@@ -189,13 +192,15 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
     setIsRechunking(true);
 
     try {
-      console.log(`开始重新分块，设置大小: ${chunkSize}，文件数: ${uploadedContents.length}，分割策略: ${splitterType}`);
-      // 使用新的分块大小和分割策略进行分块
-      const processedChunks = await questionGeneratorService.processContentFiles(uploadedContents, chunkSize, splitterType);
-
-      console.log(`重新分块完成，生成了 ${processedChunks.length} 个块`);
+      let processedChunks = [];
+      if (splitMode === 'langchain') {
+        processedChunks = await questionGeneratorService.processContentFiles(uploadedContents, chunkSize, splitterType);
+      } else if (splitMode === 'llamaindex') {
+        // 这里调用 LlamaIndex 分块实现（可用后端API，或前端占位）
+        processedChunks = await questionGeneratorService.processContentFilesWithLlamaIndex(uploadedContents, chunkSize);
+      }
       setChunks(processedChunks);
-      message.success(`已使用新的块大小 (${chunkSize} 字符) 和分割策略 (${splitterType}) 完成分块`);
+      message.success('分块完成');
     } catch (error) {
       message.error(`重新分块失败: ${(error as Error).message}`);
     } finally {
@@ -502,20 +507,59 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
 
           {/* 添加分割策略选择器 */}
           <div className={styles.splitterSelector}>
-            <h4>分割策略(使用LangChain)</h4>
-            <Radio.Group
-              value={splitterType}
-              onChange={(e) => setSplitterType(e.target.value)}
-              options={[
-                { label: '递归字符分割 (通用)', value: 'recursive' },
-                { label: '代码分割 (针对程序代码)', value: 'code' },
-                { label: 'Markdown分割', value: 'markdown' },
-                { label: 'HTML分割', value: 'html' },
-                // { label: 'LaTeX分割', value: 'latex' }
-              ]}
-              optionType="button"
-              buttonStyle="solid"
-            />
+            <h4>分割策略</h4>
+            {/* 主策略按钮组，单独一行并用橙色突出 */}
+            <Space style={{ marginBottom: 20 }}>
+              <Button
+                className={styles.orangePrimary}
+                style={{
+                  background: splitMode === 'langchain' ? '#fa8c16' : undefined,
+                  color: splitMode === 'langchain' ? '#fff' : undefined,
+                  borderColor: '#fa8c16',
+                  boxShadow: splitMode === 'langchain' ? '0 0 0 2px rgba(250,140,22,0.2)' : undefined,
+                }}
+                type={splitMode === 'langchain' ? 'primary' : 'default'}
+                onClick={() => setSplitMode('langchain')}
+              >
+                分割策略(使用LangChain)
+              </Button>
+              <Button
+                className={styles.orangePrimary}
+                style={{
+                  background: splitMode === 'llamaindex' ? '#fa8c16' : undefined,
+                  color: splitMode === 'llamaindex' ? '#fff' : undefined,
+                  borderColor: '#fa8c16',
+                  boxShadow: splitMode === 'llamaindex' ? '0 0 0 2px rgba(250,140,22,0.2)' : undefined,
+                }}
+                type={splitMode === 'llamaindex' ? 'primary' : 'default'}
+                onClick={() => setSplitMode('llamaindex')}
+              >
+                分割策略(使用LlamaIndex)
+              </Button>
+            </Space>
+            {/* 子策略选项，单独一行，主次分明 */}
+            {splitMode === 'langchain' && (
+              <div style={{ marginBottom: 8 }}>
+                <Radio.Group
+                  value={splitterType}
+                  onChange={(e) => setSplitterType(e.target.value)}
+                  options={[
+                    { label: '递归字符分割 (通用)', value: 'recursive' },
+                    { label: '代码分割 (针对程序代码)', value: 'code' },
+                    { label: 'Markdown分割', value: 'markdown' },
+                    { label: 'HTML分割', value: 'html' },
+                  ]}
+                  optionType="button"
+                  buttonStyle="solid"
+                  style={{ marginTop: 8 }}
+                />
+              </div>
+            )}
+            {splitMode === 'llamaindex' && (
+              <div style={{ marginTop: 8, color: '#888' }}>
+                <span>将使用 LlamaIndex 后端分块（需后端支持）</span>
+              </div>
+            )}
           </div>
 
           <div className={styles.sliderDescription}>

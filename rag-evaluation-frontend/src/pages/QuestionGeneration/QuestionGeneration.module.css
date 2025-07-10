@@ -501,3 +501,10 @@
   border: 1px solid #ffccc7;
   margin-top: 8px;
 }
+
+.orangePrimary:focus,
+.orangePrimary:active {
+  box-shadow: 0 0 0 2px rgba(250,140,22,0.2) !important;
+  outline: none !important;
+  border-color: #fa8c16 !important;
+}

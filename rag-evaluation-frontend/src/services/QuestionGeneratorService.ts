@@ -44,7 +44,7 @@ export class QuestionGeneratorService {
   private maxConcurrentRequests = 3;
   private datasetId: string | null = null;
   private fileSourceMap: Map<string, string> = new Map(); // 用于存储分块ID和源文件名的映射
-  private defaultChunkSize = 1000;
+  private defaultChunkSize = 2048;//默认切块个数
   private splitterType: SplitterType = 'recursive';
   private isStopped: boolean = false; // 添加停止标志
   
@@ -800,6 +800,15 @@ export class QuestionGeneratorService {
     this.progress.totalChunks = this.chunks.filter(chunk => chunk.selected).length;
     
     return this.chunks;
+  }
+
+  // LlamaIndex 分块占位方法
+  public async processContentFilesWithLlamaIndex(contentFiles: {name: string, content: string}[], chunkSize?: number): Promise<TextChunk[]> {
+    // TODO: 调用后端API实现 LlamaIndex 分块，当前仅返回空数组或模拟数据
+    // 示例：
+    // const response = await fetch('/api/llamaindex_split', ...)
+    // return await response.json();
+    return [];
   }
 
   // 添加获取块源文件的方法
