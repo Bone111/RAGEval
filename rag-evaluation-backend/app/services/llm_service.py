@@ -4,6 +4,30 @@ import json
 import time
 import re
 
+# llama-index 分块逻辑
+from typing import List
+from llama_index.core.text_splitter import SentenceSplitter
+import uuid
+
+def llamaindex_split_files(files: List[dict], chunk_size: int = 2048, chunk_overlap: int = 50, include_metadata: bool = False):
+    all_chunks = []
+    for file in files:
+        parser = SentenceSplitter(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            include_metadata=include_metadata
+        )
+        chunks = parser.split_text(file['content'])
+        for chunk in chunks:
+            all_chunks.append({
+                "id": str(uuid.uuid4()),
+                "content": chunk,
+                "tokens": len(chunk),
+                "selected": True,
+                "fileName": file['name']
+            })
+    return all_chunks
+
 class QuestionGenerator:
     """使用大模型生成问答对"""
     

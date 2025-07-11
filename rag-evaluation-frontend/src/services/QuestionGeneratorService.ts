@@ -802,13 +802,25 @@ export class QuestionGeneratorService {
     return this.chunks;
   }
 
-  // LlamaIndex 分块占位方法
+  // LlamaIndex 分块实现，调用后端API
   public async processContentFilesWithLlamaIndex(contentFiles: {name: string, content: string}[], chunkSize?: number): Promise<TextChunk[]> {
-    // TODO: 调用后端API实现 LlamaIndex 分块，当前仅返回空数组或模拟数据
-    // 示例：
-    // const response = await fetch('/api/llamaindex_split', ...)
-    // return await response.json();
-    return [];
+    const chunk_overlap = 50;
+    const include_metadata = false;
+    const response = await fetch('/api/v1/llamaindex_split', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        files: contentFiles,
+        chunk_size: chunkSize || 2048,
+        chunk_overlap,
+        include_metadata,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error('LlamaIndex分块API请求失败');
+    }
+    const chunks = await response.json();
+    return chunks;
   }
 
   // 添加获取块源文件的方法

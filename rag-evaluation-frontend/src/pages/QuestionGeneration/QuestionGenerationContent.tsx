@@ -45,6 +45,23 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
   // 修改状态，保存文件内容而不是File对象
   const [uploadedContents, setUploadedContents] = useState<FileContent[]>([]);
 
+  // 添加进度条相关状态
+  const [conversionProgress, setConversionProgress] = useState<{
+    visible: boolean;
+    percent: number;
+    message: string;
+    step: string;
+  }>({
+    visible: false,
+    percent: 0,
+    message: '',
+    step: ''
+  });
+
+  // 添加任务ID状态
+  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+
   // 添加分割方式状态
   const [splitterType, setSplitterType] = useState<SplitterType>('recursive');
 
@@ -161,26 +178,254 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
     }
   };
 
-  // 读取文件内容的辅助函数
-  const readFileContent = (file: File): Promise<string> => {
+  // 轮询进度的方法
+  const pollProgress = async (taskId: string): Promise<string> => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-
-      reader.onload = (e) => {
-        if (e.target?.result) {
-          resolve(e.target.result as string);
-        } else {
-          reject(new Error('读取文件内容失败'));
+      const interval = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/v1/convert-progress/${taskId}`);
+          const data = await response.json();
+          
+          // 更新进度条
+          setConversionProgress({
+            visible: true,
+            percent: data.progress,
+            message: data.message,
+            step: data.step
+          });
+          
+          // 检查是否完成
+          if (data.success === true) {
+            clearInterval(interval);
+            setPollingInterval(null);
+            
+            // 获取结果
+            const resultResponse = await fetch(`/api/v1/convert-result/${taskId}`);
+            const resultData = await resultResponse.json();
+            
+            if (resultData.success && resultData.md_content) {
+              // 延迟隐藏进度条
+              setTimeout(() => {
+                setConversionProgress({
+                  visible: false,
+                  percent: 0,
+                  message: '',
+                  step: ''
+                });
+              }, 1000);
+              
+              resolve(resultData.md_content);
+            } else {
+              reject(new Error(resultData.error || '获取结果失败'));
+            }
+          } else if (data.success === false) {
+            clearInterval(interval);
+            setPollingInterval(null);
+            
+            // 延迟隐藏进度条
+            setTimeout(() => {
+              setConversionProgress({
+                visible: false,
+                percent: 0,
+                message: '',
+                step: ''
+              });
+            }, 3000);
+            
+            reject(new Error(data.error || '转换失败'));
+          }
+        } catch (error) {
+          clearInterval(interval);
+          setPollingInterval(null);
+          
+          // 延迟隐藏进度条
+          setTimeout(() => {
+            setConversionProgress({
+              visible: false,
+              percent: 0,
+              message: '',
+              step: ''
+            });
+          }, 3000);
+          
+          reject(error);
         }
-      };
-
-      reader.onerror = () => {
-        reject(new Error(`读取文件出错: ${file.name}`));
-      };
-
-      reader.readAsText(file);
+      }, 1000); // 每秒轮询一次
+      
+      setPollingInterval(interval);
     });
   };
+
+  // 上传文件并获取md内容（异步轮询版本）
+  const uploadAndConvertToMdAsync = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // 显示进度条
+    setConversionProgress({
+      visible: true,
+      percent: 0,
+      message: '正在上传文件...',
+      step: '上传文件'
+    });
+
+    try {
+      // 创建异步任务
+      const response = await fetch('/api/v1/convert-to-md-async/', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await response.json();
+      
+      if (data.task_id) {
+        setCurrentTaskId(data.task_id);
+        
+        // 开始轮询进度
+        const mdContent = await pollProgress(data.task_id);
+        return mdContent;
+      } else {
+        throw new Error(data.error || '创建任务失败');
+      }
+    } catch (error) {
+      // 显示错误信息
+      setConversionProgress({
+        visible: true,
+        percent: 100,
+        message: `转换失败: ${(error as Error).message}`,
+        step: '错误'
+      });
+      
+      // 延迟隐藏进度条
+      setTimeout(() => {
+        setConversionProgress({
+          visible: false,
+          percent: 0,
+          message: '',
+          step: ''
+        });
+      }, 3000);
+      
+      throw error;
+    }
+  };
+
+  // 上传文件并获取md内容（带进度条）
+  const uploadAndConvertToMdWithProgress = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // 显示进度条
+    setConversionProgress({
+      visible: true,
+      percent: 0,
+      message: '正在上传文件...',
+      step: '上传文件'
+    });
+
+    try {
+      const response = await fetch('/api/v1/convert-to-md-with-progress/', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.md_content) {
+        // 更新进度到100%
+        setConversionProgress({
+          visible: true,
+          percent: 100,
+          message: data.message || '转换完成！',
+          step: data.step || '完成转换'
+        });
+        
+        // 延迟隐藏进度条
+        setTimeout(() => {
+          setConversionProgress({
+            visible: false,
+            percent: 0,
+            message: '',
+            step: ''
+          });
+        }, 1000);
+        
+        return data.md_content;
+      } else {
+        // 显示错误信息
+        setConversionProgress({
+          visible: true,
+          percent: 100,
+          message: data.error || '转换失败',
+          step: '错误'
+        });
+        
+        // 延迟隐藏进度条
+        setTimeout(() => {
+          setConversionProgress({
+            visible: false,
+            percent: 0,
+            message: '',
+            step: ''
+          });
+        }, 3000);
+        
+        throw new Error(data.error || 'mineru转换失败');
+      }
+    } catch (error) {
+      // 显示错误信息
+      setConversionProgress({
+        visible: true,
+        percent: 100,
+        message: `转换失败: ${(error as Error).message}`,
+        step: '错误'
+      });
+      
+      // 延迟隐藏进度条
+      setTimeout(() => {
+        setConversionProgress({
+          visible: false,
+          percent: 0,
+          message: '',
+          step: ''
+        });
+      }, 3000);
+      
+      throw error;
+    }
+  };
+
+  // 上传文件并获取md内容（原版本，保留兼容性）
+  const uploadAndConvertToMd = async (file: File): Promise<string> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch('/api/v1/convert-to-md/', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await response.json();
+    if (data.md_content) {
+      return data.md_content;
+    } else {
+      throw new Error(data.error || 'mineru转换失败');
+    }
+  };
+
+  // 读取文件内容的辅助函数（使用异步轮询版本）
+  const readFileContent = async (file: File): Promise<string> => {
+    // 使用异步轮询的 mineru 转换
+    return await uploadAndConvertToMdAsync(file);
+  };
+
+  // 组件卸载时清理轮询
+  useEffect(() => {
+    return () => {
+      if (pollingInterval) {
+        clearInterval(pollingInterval);
+      }
+    };
+  }, [pollingInterval]);
 
   // 修改重新分块功能，传入分割类型
   const handleRechunk = async () => {
@@ -440,6 +685,26 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
           />
         )}
 
+        {/* 添加进度条显示 */}
+        {conversionProgress.visible && (
+          <div style={{ marginBottom: 24 }}>
+            <Progress
+              percent={conversionProgress.percent}
+              status={conversionProgress.percent === 100 ? 'success' : 'active'}
+              strokeColor={{
+                '0%': '#108ee9',
+                '100%': '#87d068',
+              }}
+              format={(percent) => `${percent}%`}
+            />
+            <div style={{ textAlign: 'center', marginTop: 8 }}>
+              <Typography.Text strong>{conversionProgress.step}</Typography.Text>
+              <br />
+              <Typography.Text type="secondary">{conversionProgress.message}</Typography.Text>
+            </div>
+          </div>
+        )}
+
         <Upload.Dragger
           multiple
           fileList={fileList}
@@ -452,10 +717,10 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
           </p>
           <p className="ant-upload-text">点击或拖拽文件到此区域上传</p>
           <p className="ant-upload-hint">
-            支持 TXT, MD 格式文件，建议文件大小不超过10MB
+            支持 TXT, MD, PDF, DOCX, DOC 格式文件，建议文件大小不超过10MB
           </p>
           <p className="ant-upload-hint">
-            因为本系统不专注于文件格式转换，所以请上传纯文本文件，您可以在其他平台转换文件格式后上传。
+            系统会自动将 PDF、Word 等文档转换为 Markdown 格式进行处理
           </p>
         </Upload.Dragger>
 
@@ -463,7 +728,7 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
           <Button
             type="primary"
             onClick={handleProcessFiles}
-            disabled={fileList.length === 0 || isProcessing || !isConfigured}
+            disabled={fileList.length === 0 || isProcessing || !isConfigured || conversionProgress.visible}
             loading={isProcessing}
           >
             {isProcessing ? '处理中...' : '处理文件'}
