@@ -6,6 +6,8 @@ import { questionGeneratorService, SplitterType, FailedRequestRecord } from '../
 import { TextChunk, GenerationParams, GeneratedQA, ProgressInfo } from '../../types/question-generator';
 import styles from './QuestionGeneration.module.css';
 import { ConfigManager, ModelConfig } from '@utils/configManager';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const { Option } = Select;
 const { Column } = Table;
@@ -44,23 +46,91 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
 
   // 修改状态，保存文件内容而不是File对象
   const [uploadedContents, setUploadedContents] = useState<FileContent[]>([]);
+  const [parsedFiles, setParsedFiles] = useState<any[]>([]); // 保存每个文件的解析状态和内容
+  const [previewModalVisible, setPreviewModalVisible] = useState(false); // 预览弹窗
+  const [selectedPreviewFile, setSelectedPreviewFile] = useState<any>(null); // 选中的预览文件
 
-  // 添加进度条相关状态
-  const [conversionProgress, setConversionProgress] = useState<{
-    visible: boolean;
-    percent: number;
-    message: string;
-    step: string;
-  }>({
-    visible: false,
-    percent: 0,
-    message: '',
-    step: ''
-  });
+  // 预览单个文件的弹窗
+  const [filePreviewModalVisible, setFilePreviewModalVisible] = useState(false);
+  const [filePreviewPath, setFilePreviewPath] = useState<string | null>(null);
+  const [filePreviewType, setFilePreviewType] = useState<string | null>(null);
+  const [filePreviewContent, setFilePreviewContent] = useState<string | null>(null);
 
-  // 添加任务ID状态
-  const [currentTaskId, setCurrentTaskId] = useState<string | null>(null);
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  // 预览按钮点击时
+  const handlePreview = (fpath: string) => {
+    // 如果 fpath 不是绝对地址，则加上 window.location.origin
+    let fullPath = fpath;
+    if (!/^https?:\/\//.test(fpath)) {
+      // fullPath = window.location.origin + fpath;
+    }
+    console.log('预览文件地址:', fullPath); // 打印完整预览地址
+    setFilePreviewPath(fullPath);
+    setFilePreviewType(fullPath.split('.').pop()?.toLowerCase() || '');
+    setFilePreviewContent(null);
+    setFilePreviewModalVisible(true);
+    // 对于 txt/json/md 先 fetch 内容
+    if (/\.(json|txt|md)$/i.test(fullPath)) {
+      fetch(fullPath)
+        .then(res => res.text())
+        .then(text => setFilePreviewContent(text))
+        .catch(() => setFilePreviewContent('无法加载内容'));
+    }
+  };
+
+  // 预览渲染
+  const renderFilePreviewModal = () => {
+    if (!filePreviewPath) return null;
+    if (/\.(png|jpg|jpeg|gif)$/i.test(filePreviewPath)) {
+      return (
+        <div style={{ textAlign: 'center', padding: 24 }}>
+          <img src={filePreviewPath} alt="" style={{ maxWidth: '90%', maxHeight: 600, borderRadius: 8, boxShadow: '0 2px 16px #eee', border: '1px solid #eee' }} />
+        </div>
+      );
+    }
+    if (/\.(pdf)$/i.test(filePreviewPath)) {
+      return (
+        <iframe
+          src={filePreviewPath}
+          title="PDF预览"
+          style={{ width: '100%', height: 700, border: 'none', borderRadius: 8, boxShadow: '0 2px 16px #eee' }}
+        />
+      );
+    }
+    if (/\.(md)$/i.test(filePreviewPath)) {
+      return (
+        <div style={{ background: '#fff', padding: 24, borderRadius: 8, height: 700, overflow: 'auto', fontFamily: 'inherit', boxShadow: '0 2px 16px #eee' }}>
+          {filePreviewContent ? (
+            <ReactMarkdown children={filePreviewContent} remarkPlugins={[remarkGfm]} />
+          ) : '加载中...'}
+        </div>
+      );
+    }
+    if (/\.(txt)$/i.test(filePreviewPath)) {
+      return (
+        <div style={{ background: '#f6f8fa', padding: 24, borderRadius: 8, height: 700, overflow: 'auto', fontFamily: 'monospace', boxShadow: '0 2px 16px #eee' }}>
+          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>{filePreviewContent ?? '加载中...'}</pre>
+        </div>
+      );
+    }
+    if (/\.(json)$/i.test(filePreviewPath)) {
+      let formatted = '';
+      try {
+        formatted = filePreviewContent ? JSON.stringify(JSON.parse(filePreviewContent), null, 2) : '';
+      } catch {
+        formatted = filePreviewContent || '';
+      }
+      return (
+        <div style={{ background: '#23272e', color: '#fff', padding: 24, borderRadius: 8, height: 700, overflow: 'auto', fontFamily: 'monospace', boxShadow: '0 2px 16px #eee' }}>
+          <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-all', margin: 0 }}>{formatted || '加载中...'}</pre>
+        </div>
+      );
+    }
+    return (
+      <div style={{ textAlign: 'center', color: '#888', padding: 48 }}>
+        暂不支持该类型文件的预览
+      </div>
+    );
+  };
 
   // 添加分割方式状态
   const [splitterType, setSplitterType] = useState<SplitterType>('recursive');
@@ -94,6 +164,10 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
 
   const [availableModels, setAvailableModels] = useState<ModelConfig[]>([]);
   const [selectedModelId, setSelectedModelId] = useState<string>('');
+
+  // 新增解析状态 state
+  const [parsingStatus, setParsingStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [parsingError, setParsingError] = useState<string>('');
 
   // 添加加载可用模型的函数
   const loadAvailableModels = async () => {
@@ -130,8 +204,7 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
 
   const handleFileUpload = async (info: any) => {
     let fileList = [...info.fileList];
-    // 限制最多上传5个文件
-    fileList = fileList.slice(-5);
+    fileList = fileList.slice(-1);
     setFileList(fileList);
 
     if (info.file.status === 'done') {
@@ -139,293 +212,89 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
     } else if (info.file.status === 'error') {
       message.error(`${info.file.name} 上传失败`);
     }
-  };
 
-  const handleProcessFiles = async () => {
-    if (fileList.length === 0) {
-      message.warning('请先上传文件');
-      return;
-    }
+    if (fileList.length === 0) return;
 
-    setIsProcessing(true);
+    setParsingStatus('loading');
+    setParsingError('');
+    setParsedFiles([]);
 
     try {
       const files = fileList.map(file => file.originFileObj);
-
-      // 读取并保存所有文件内容
-      const contents: FileContent[] = [];
-      for (const file of files) {
-        const content = await readFileContent(file);
-        contents.push({
-          name: file.name,
-          content
-        });
+      const formData = new FormData();
+      formData.append('file', files[0]);
+      formData.append('token', 'eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiI3NDkwMjY1NiIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc1MjIyNDE3NiwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiIiwib3BlbklkIjpudWxsLCJ1dWlkIjoiNDg2OGVhOWYtYzEyMS00ZmE3LWE0ZGItOWNmZGVmYTJhYzdmIiwiZW1haWwiOiIiLCJleHAiOjE3NTM0MzM3NzZ9.wVsmqpQIvAWAWFgrC0VbWyOLjoLYwUce6w44lTh2ONHHPHZuns_xamABnTeNSR_CjRHB-pPbwNqB4T5JZkKWfA');
+      formData.append('is_ocr', 'true');
+      formData.append('enable_formula', 'false');
+      const response = await fetch('/api/v1/mineru/mineru-upload-and-parse', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+      if (data && data.files) {
+        setParsedFiles(data.files);
+        setParsingStatus('success');
+      } else {
+        setParsingStatus('error');
+        setParsingError(data.error || 'mineru解析失败');
       }
+    } catch (err: any) {
+      setParsingStatus('error');
+      setParsingError(err.message || 'mineru解析异常');
+    }
+  };
 
-      // 保存文件内容
-      setUploadedContents(contents);
-      console.log('保存了文件内容:', contents.map(c => c.name));
+  const handleProcessFiles = () => {
+    if (parsedFiles.length === 0) {
+      message.warning('请先上传并解析文件');
+      return;
+    }
+    setPreviewModalVisible(true);
+  };
 
-      // 使用默认分块大小进行初始分块
-      const processedChunks = await questionGeneratorService.processContentFiles(contents);
+  // 只对选中的文件内容进行切片
+  const handleNextStep = async () => {
+    if (!selectedPreviewFile) {
+      message.warning('请先选择一个文件进行切片');
+      return;
+    }
+    setPreviewModalVisible(false);
+
+    // 只对选中的 extracted_files 文件内容进行切片
+    let content = '';
+    const { fpath, filename } = selectedPreviewFile;
+    if (/\.(md|txt|json)$/i.test(fpath)) {
+      try {
+        const res = await fetch(fpath);
+        content = await res.text();
+      } catch (e) {
+        message.error('读取文件内容失败');
+        return;
+      }
+    } else {
+      message.error('暂不支持二进制文件的切片');
+      return;
+    }
+    const contents = [{ name: filename || (fpath && fpath.split('/')?.pop()) || 'file', content }];
+    setUploadedContents(contents);
+    // 使用默认分块大小进行初始分块
+    questionGeneratorService.processContentFiles(contents).then(processedChunks => {
       setChunks(processedChunks);
       setCurrentTab('chunks');
       message.success('文件处理完成，请确认文本分块');
-    } catch (error) {
+    }).catch(error => {
       message.error(`处理文件失败: ${(error as Error).message}`);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  // 轮询进度的方法
-  const pollProgress = async (taskId: string): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const interval = setInterval(async () => {
-        try {
-          const response = await fetch(`/api/v1/convert-progress/${taskId}`);
-          const data = await response.json();
-          
-          // 更新进度条
-          setConversionProgress({
-            visible: true,
-            percent: data.progress,
-            message: data.message,
-            step: data.step
-          });
-          
-          // 检查是否完成
-          if (data.success === true) {
-            clearInterval(interval);
-            setPollingInterval(null);
-            
-            // 获取结果
-            const resultResponse = await fetch(`/api/v1/convert-result/${taskId}`);
-            const resultData = await resultResponse.json();
-            
-            if (resultData.success && resultData.md_content) {
-              // 延迟隐藏进度条
-              setTimeout(() => {
-                setConversionProgress({
-                  visible: false,
-                  percent: 0,
-                  message: '',
-                  step: ''
-                });
-              }, 1000);
-              
-              resolve(resultData.md_content);
-            } else {
-              reject(new Error(resultData.error || '获取结果失败'));
-            }
-          } else if (data.success === false) {
-            clearInterval(interval);
-            setPollingInterval(null);
-            
-            // 延迟隐藏进度条
-            setTimeout(() => {
-              setConversionProgress({
-                visible: false,
-                percent: 0,
-                message: '',
-                step: ''
-              });
-            }, 3000);
-            
-            reject(new Error(data.error || '转换失败'));
-          }
-        } catch (error) {
-          clearInterval(interval);
-          setPollingInterval(null);
-          
-          // 延迟隐藏进度条
-          setTimeout(() => {
-            setConversionProgress({
-              visible: false,
-              percent: 0,
-              message: '',
-              step: ''
-            });
-          }, 3000);
-          
-          reject(error);
-        }
-      }, 1000); // 每秒轮询一次
-      
-      setPollingInterval(interval);
     });
   };
 
-  // 上传文件并获取md内容（异步轮询版本）
-  const uploadAndConvertToMdAsync = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    // 显示进度条
-    setConversionProgress({
-      visible: true,
-      percent: 0,
-      message: '正在上传文件...',
-      step: '上传文件'
-    });
-
-    try {
-      // 创建异步任务
-      const response = await fetch('/api/v1/convert-to-md-async/', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      const data = await response.json();
-      
-      if (data.task_id) {
-        setCurrentTaskId(data.task_id);
-        
-        // 开始轮询进度
-        const mdContent = await pollProgress(data.task_id);
-        return mdContent;
-      } else {
-        throw new Error(data.error || '创建任务失败');
-      }
-    } catch (error) {
-      // 显示错误信息
-      setConversionProgress({
-        visible: true,
-        percent: 100,
-        message: `转换失败: ${(error as Error).message}`,
-        step: '错误'
-      });
-      
-      // 延迟隐藏进度条
-      setTimeout(() => {
-        setConversionProgress({
-          visible: false,
-          percent: 0,
-          message: '',
-          step: ''
-        });
-      }, 3000);
-      
-      throw error;
-    }
-  };
-
-  // 上传文件并获取md内容（带进度条）
-  const uploadAndConvertToMdWithProgress = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    // 显示进度条
-    setConversionProgress({
-      visible: true,
-      percent: 0,
-      message: '正在上传文件...',
-      step: '上传文件'
-    });
-
-    try {
-      const response = await fetch('/api/v1/convert-to-md-with-progress/', {
-        method: 'POST',
-        body: formData,
-      });
-      
-      const data = await response.json();
-      
-      if (data.success && data.md_content) {
-        // 更新进度到100%
-        setConversionProgress({
-          visible: true,
-          percent: 100,
-          message: data.message || '转换完成！',
-          step: data.step || '完成转换'
-        });
-        
-        // 延迟隐藏进度条
-        setTimeout(() => {
-          setConversionProgress({
-            visible: false,
-            percent: 0,
-            message: '',
-            step: ''
-          });
-        }, 1000);
-        
-        return data.md_content;
-      } else {
-        // 显示错误信息
-        setConversionProgress({
-          visible: true,
-          percent: 100,
-          message: data.error || '转换失败',
-          step: '错误'
-        });
-        
-        // 延迟隐藏进度条
-        setTimeout(() => {
-          setConversionProgress({
-            visible: false,
-            percent: 0,
-            message: '',
-            step: ''
-          });
-        }, 3000);
-        
-        throw new Error(data.error || 'mineru转换失败');
-      }
-    } catch (error) {
-      // 显示错误信息
-      setConversionProgress({
-        visible: true,
-        percent: 100,
-        message: `转换失败: ${(error as Error).message}`,
-        step: '错误'
-      });
-      
-      // 延迟隐藏进度条
-      setTimeout(() => {
-        setConversionProgress({
-          visible: false,
-          percent: 0,
-          message: '',
-          step: ''
-        });
-      }, 3000);
-      
-      throw error;
-    }
-  };
-
-  // 上传文件并获取md内容（原版本，保留兼容性）
-  const uploadAndConvertToMd = async (file: File): Promise<string> => {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const response = await fetch('/api/v1/convert-to-md/', {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await response.json();
-    if (data.md_content) {
-      return data.md_content;
-    } else {
-      throw new Error(data.error || 'mineru转换失败');
-    }
-  };
-
-  // 读取文件内容的辅助函数（使用异步轮询版本）
-  const readFileContent = async (file: File): Promise<string> => {
-    // 使用异步轮询的 mineru 转换
-    return await uploadAndConvertToMdAsync(file);
-  };
+ 
 
   // 组件卸载时清理轮询
   useEffect(() => {
     return () => {
-      if (pollingInterval) {
-        clearInterval(pollingInterval);
-      }
+      // 删除与 /api/v1/convert-to-md-async 相关的 state、pollingInterval、pollProgress、conversionProgress、uploadAndConvertToMdAsync、uploadAndConvertToMdWithProgress、uploadAndConvertToMd
     };
-  }, [pollingInterval]);
+  }, []);
 
   // 修改重新分块功能，传入分割类型
   const handleRechunk = async () => {
@@ -663,6 +532,68 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
     </div>
   );
 
+  // 支持多类型文件预览
+  const renderExtractedFilePreview = (filePath: string) => {
+    if (/\.(png|jpg|jpeg|gif)$/i.test(filePath)) {
+      return <img src={filePath} alt="" style={{ maxWidth: 400, maxHeight: 400, margin: 8 }} />;
+    }
+    if (/\.(pdf)$/i.test(filePath)) {
+      return (
+        <iframe
+          src={filePath}
+          title="PDF预览"
+          style={{ width: 400, height: 400, border: '1px solid #eee', margin: 8 }}
+        />
+      );
+    }
+    if (/\.(md)$/i.test(filePath)) {
+      return (
+        <iframe
+          src={filePath}
+          title="Markdown预览"
+          style={{ width: 400, height: 400, border: '1px solid #eee', margin: 8 }}
+        />
+      );
+    }
+    if (/\.(txt)$/i.test(filePath)) {
+      return (
+        <iframe
+          src={filePath}
+          title="文本预览"
+          style={{ width: 400, height: 400, border: '1px solid #eee', margin: 8 }}
+        />
+      );
+    }
+    // 其他类型
+    return <span style={{ margin: 8 }}>{filePath.split('/').pop()}</span>;
+  };
+
+  // 新增：清理缓存确认弹窗状态
+  const [clearCacheModalVisible, setClearCacheModalVisible] = useState(false);
+
+  // 修改清理缓存函数，弹出确认框
+  const handleClearMineruCache = async () => {
+    setClearCacheModalVisible(true);
+  };
+
+  const doClearMineruCache = async () => {
+    try {
+      const resp = await fetch('/api/v1/mineru/clear-mineru-cache', { method: 'POST' });
+      const data = await resp.json();
+      if (data.success) {
+        message.success('mineru解析缓存已清理');
+        setParsedFiles([]);
+        setParsingStatus('idle');
+      } else {
+        message.error(data.error || '清理缓存失败');
+      }
+    } catch (e) {
+      message.error('清理缓存请求失败');
+    } finally {
+      setClearCacheModalVisible(false);
+    }
+  };
+
   const renderUploadContent = () => (
     <Card title="上传文件" className={styles.card}>
       <div className={styles.uploadSection}>
@@ -684,27 +615,6 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
             style={{ marginBottom: 24 }}
           />
         )}
-
-        {/* 添加进度条显示 */}
-        {conversionProgress.visible && (
-          <div style={{ marginBottom: 24 }}>
-            <Progress
-              percent={conversionProgress.percent}
-              status={conversionProgress.percent === 100 ? 'success' : 'active'}
-              strokeColor={{
-                '0%': '#108ee9',
-                '100%': '#87d068',
-              }}
-              format={(percent) => `${percent}%`}
-            />
-            <div style={{ textAlign: 'center', marginTop: 8 }}>
-              <Typography.Text strong>{conversionProgress.step}</Typography.Text>
-              <br />
-              <Typography.Text type="secondary">{conversionProgress.message}</Typography.Text>
-            </div>
-          </div>
-        )}
-
         <Upload.Dragger
           multiple
           fileList={fileList}
@@ -723,23 +633,154 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
             系统会自动将 PDF、Word 等文档转换为 Markdown 格式进行处理
           </p>
         </Upload.Dragger>
-
+        {/* 解析状态提示 */}
+        {parsingStatus === 'loading' && (
+          <div style={{ marginTop: 16 }}>
+            <Spin /> 正在解析文件，请稍候...
+          </div>
+        )}
+        {parsingStatus === 'success' && (
+          <Alert
+            type="success"
+            message="文件解析完成！可点击下方“处理文件”进行预览和切片"
+            showIcon
+            style={{ marginTop: 16, marginBottom: 8 }}
+          />
+        )}
+        {parsingStatus === 'success' && parsedFiles.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            {parsedFiles.map(file => (
+              <div key={file.filename} style={{ marginBottom: 8, padding: 8, border: '1px solid #eee', borderRadius: 4 }}>
+                <b>{file.filename}</b> - 状态: {file.success
+                  ? <span style={{ color: '#52c41a', fontWeight: 500 }}>解析成功</span>
+                  : <span style={{ color: '#ff4d4f', fontWeight: 500 }}>解析失败</span>}
+                {file.error_msg && <div style={{ color: '#ff4d4f' }}>错误: {file.error_msg}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+        {parsingStatus === 'error' && (
+          <Alert type="error" message={`文件解析失败: ${parsingError}`} showIcon style={{ marginTop: 16 }} />
+        )}
         <div className={styles.actionBar}>
           <Button
             type="primary"
             onClick={handleProcessFiles}
-            disabled={fileList.length === 0 || isProcessing || !isConfigured || conversionProgress.visible}
+            disabled={parsedFiles.filter(f => f.success).length === 0 || isProcessing || !isConfigured}
             loading={isProcessing}
           >
             {isProcessing ? '处理中...' : '处理文件'}
           </Button>
+          {/* 仅当本地有已解析文件时显示清理缓存按钮及备注 */}
+          {parsedFiles.length > 0 && (
+            <>
+              <Button
+                danger
+                style={{ marginLeft: 16 }}
+                onClick={handleClearMineruCache}
+              >
+                清理缓存
+              </Button>
+              <span style={{ marginLeft: 8, color: '#888', fontSize: 13 }}>
+                （清除已经解析的文档）
+              </span>
+              <Modal
+                open={clearCacheModalVisible}
+                onCancel={() => setClearCacheModalVisible(false)}
+                onOk={doClearMineruCache}
+                okText="确定"
+                cancelText="取消"
+                title="确认清理缓存"
+              >
+                <div style={{ color: '#ff4d4f', fontWeight: 500 }}>
+                  确定要清除所有已解析的文档吗？此操作不可恢复。
+                </div>
+              </Modal>
+            </>
+          )}
         </div>
+        {/* 预览弹窗 */}
+        <Modal
+          title="解析结果预览"
+          open={previewModalVisible}
+          onCancel={() => setPreviewModalVisible(false)}
+          footer={[
+            <Button key="next" type="primary" disabled={!selectedPreviewFile} onClick={handleNextStep}>
+              下一步
+            </Button>
+          ]}
+          width={900}
+        >
+        {/* 文件列表单选+预览 */}
+        <div style={{ maxHeight: 500, overflow: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: 0 }}>
+            <thead>
+              <tr>
+                <th style={{ width: 40 }}></th>
+                <th>文件名</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {parsedFiles
+                .filter(file => file.success && Array.isArray(file.extracted_files) && file.extracted_files.length > 0)
+                .flatMap(file => file.extracted_files.map((fpath: string) => ({
+                  file,
+                  fpath
+                })))
+                .map(({ file, fpath }, idx) => (
+                  <tr
+                    key={fpath}
+                    style={{
+                      background: selectedPreviewFile && selectedPreviewFile.fpath === fpath ? '#e6f7ff' : undefined,
+                      height: 48,
+                      verticalAlign: 'middle',
+                      borderBottom: '1px solid #f0f0f0',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setSelectedPreviewFile({ ...file, fpath })}
+                  >
+                    <td style={{ padding: '8px 12px' }} onClick={e => e.stopPropagation()}>
+                      <Radio
+                        checked={selectedPreviewFile && selectedPreviewFile.fpath === fpath}
+                        onChange={() => setSelectedPreviewFile({ ...file, fpath })}
+                      />
+                    </td>
+                    <td style={{ padding: '8px 12px', fontSize: 16 }}>{fpath.split('/').pop()}</td>
+                    <td style={{ padding: '8px 12px' }}>
+                      <Button size="small" style={{ marginLeft: 8, marginRight: 8 }} onClick={e => { e.stopPropagation(); handlePreview(fpath); }}>预览</Button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+        {/* 单文件预览弹窗 */}
+        <Modal
+          open={filePreviewModalVisible}
+          onCancel={() => setFilePreviewModalVisible(false)}
+          footer={null}
+          width={900}
+          bodyStyle={{ padding: 0 }}
+        >
+          {renderFilePreviewModal()}
+        </Modal>
+        </Modal>
       </div>
     </Card>
   );
 
   const renderChunksContent = () => (
-    <Card title="文本分块" className={styles.card}>
+    <Card title="文本分块" className={styles.card}
+      extra={
+        <Button
+          onClick={() => setCurrentTab('upload')}
+          style={{ float: 'right' }}
+        >
+          重新选择文件
+        </Button>
+      }
+    >
       <div className={styles.chunksInfo}>
         <p>
           系统已将文件内容分成了{chunks.length}个文本块，共{chunks.filter(c => c.selected).length}个块被选中用于生成问答对。

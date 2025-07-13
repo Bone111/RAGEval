@@ -14,6 +14,10 @@ export default defineConfig({
         // 如果后端API路径也是以 /api 开头，则不需要重写
         // 如果后端API路径不包含 /api 前缀，则需要重写路径
         // rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      '/static': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true
       }
     }
   },

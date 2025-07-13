@@ -18,7 +18,7 @@ api_router.include_router(accuracy.router, prefix="/accuracy", tags=["accuracy"]
 api_router.include_router(admin.router, prefix="/admin", tags=["管理员"])
 api_router.include_router(rag_proxy.router, prefix="/rag", tags=["RAG代理"])
 api_router.include_router(llamaindex_split.router, tags=["LlamaIndex分块"])
-api_router.include_router(mineru_convert.router, tags=["mineru"])
+api_router.include_router(mineru_convert.router, prefix="/mineru", tags=["mineru"])
 
 @api_router.get("/health")
 def health_check():

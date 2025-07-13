@@ -78,8 +78,8 @@ ptyprocess==0.7.0
 pure_eval==0.2.3
 pyasn1==0.4.8
 pycparser==2.22
-pydantic==2.10.6
-pydantic_core==2.27.2
+pydantic>=2.11.5
+pydantic_core>=2.27.2
 pydantic-settings==2.8.1
 Pygments==2.19.1
 PyJWT==2.10.1
@@ -124,5 +124,7 @@ websockets==15.0.1
 wheel==0.45.1
 XlsxWriter==3.2.2
 yarg==0.1.9
-llama-index==0.10.32
-mineru==0.2.7
+
+# llama-index 相关依赖
+llama-index-core>=0.12.0,<0.13.0
+llama-index>=0.12.0,<0.13.0
