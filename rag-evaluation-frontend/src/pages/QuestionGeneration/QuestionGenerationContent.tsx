@@ -223,7 +223,7 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
       const files = fileList.map(file => file.originFileObj);
       const formData = new FormData();
       formData.append('file', files[0]);
-      formData.append('token', 'eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiI3NDkwMjY1NiIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc1MjIyNDE3NiwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiIiwib3BlbklkIjpudWxsLCJ1dWlkIjoiNDg2OGVhOWYtYzEyMS00ZmE3LWE0ZGItOWNmZGVmYTJhYzdmIiwiZW1haWwiOiIiLCJleHAiOjE3NTM0MzM3NzZ9.wVsmqpQIvAWAWFgrC0VbWyOLjoLYwUce6w44lTh2ONHHPHZuns_xamABnTeNSR_CjRHB-pPbwNqB4T5JZkKWfA');
+      formData.append('token', 'eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiI3NDkwMjY1NiIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc1NjcxNDY1MSwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiIiwib3BlbklkIjpudWxsLCJ1dWlkIjoiZWQyMjAxYTgtNzA1NC00ZGExLTg0MmQtY2ZkYzc0NDUwNGQ5IiwiZW1haWwiOiIiLCJleHAiOjE3NTc5MjQyNTF9.ZKtLJ6nV1gyo8MSB8VihzPOKEYIuZFkLIKYm4LYteg_oIOHigdRnJnhV5pd9mW6ClQWF7duZZr22S43mnB4F6w');
       formData.append('is_ocr', 'true');
       formData.append('enable_formula', 'false');
       const response = await fetch('/api/v1/mineru/mineru-upload-and-parse', {

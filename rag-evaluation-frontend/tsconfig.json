@@ -17,11 +17,11 @@
     "checkJs": false,
     "noImplicitAny": false,
     "strictNullChecks": false,
-    "baseUrl": "src",
+    "baseUrl": "./",
     "paths": {
       "@components/*": ["components/*"],
       "@utils/*": ["utils/*"],
-      "@services/*": ["services/*"],
+      "@services/*": ["src/services/*"],
       "@pages/*": ["pages/*"],
       "@hooks/*": ["hooks/*"],
       "@assets/*": ["assets/*"],
