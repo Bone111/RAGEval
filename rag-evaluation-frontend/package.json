@@ -18,6 +18,7 @@
     "@codemirror/lang-json": "^6.0.1",
     "@langchain/core": "^0.3.42",
     "@langchain/openai": "^0.4.5",
+    "remark-gfm": "^4.0.0",
     "@langchain/textsplitters": "^0.1.0",
     "@reduxjs/toolkit": "^2.6.1",
     "@uiw/react-codemirror": "^4.23.12",
