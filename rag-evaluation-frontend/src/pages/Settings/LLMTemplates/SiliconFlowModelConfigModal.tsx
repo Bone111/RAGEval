@@ -19,7 +19,14 @@ const SiliconFlowModelConfigModal: React.FC<{
     if (open) {
       form.resetFields();
       const { baseUrl, ...rest } = initialValues || {};
-      form.setFieldsValue(rest);
+      // 确保additionalParams是字符串格式
+      const processedValues = {
+        ...rest,
+        additionalParams: typeof rest.additionalParams === 'object' 
+          ? JSON.stringify(rest.additionalParams, null, 2)
+          : rest.additionalParams
+      };
+      form.setFieldsValue(processedValues);
     }
   }, [open, initialValues, form]);
 
@@ -28,14 +35,19 @@ const SiliconFlowModelConfigModal: React.FC<{
       const values = await form.validateFields();
       setLoading(true);
       message.loading('正在测试模型连通性...', 0);
+      
+      // 安全解析additionalParams
       let additionalParams: any = {};
       if (values.additionalParams) {
         try {
-          additionalParams = JSON.parse(values.additionalParams);
+          additionalParams = typeof values.additionalParams === 'string' 
+            ? JSON.parse(values.additionalParams) 
+            : values.additionalParams;
         } catch {
           additionalParams = {};
         }
       }
+      
       const client = new LLMClient({
         baseUrl: API_URL,
         apiKey: values.apiKey,
@@ -51,7 +63,7 @@ const SiliconFlowModelConfigModal: React.FC<{
       onSave({
         ...values,
         baseUrl: API_URL,
-        additionalParams: values.additionalParams ? JSON.parse(values.additionalParams) : undefined
+        additionalParams
       });
     } catch (err: any) {
       message.destroy();
@@ -63,10 +75,23 @@ const SiliconFlowModelConfigModal: React.FC<{
 
   const handleOk = async () => {
     const values = await form.validateFields();
+    
+    // 安全解析additionalParams
+    let additionalParams;
+    if (values.additionalParams) {
+      try {
+        additionalParams = typeof values.additionalParams === 'string' 
+          ? JSON.parse(values.additionalParams) 
+          : values.additionalParams;
+      } catch {
+        additionalParams = {};
+      }
+    }
+    
     onSave({
       ...values,
       baseUrl: API_URL,
-      additionalParams: values.additionalParams ? JSON.parse(values.additionalParams) : undefined
+      additionalParams
     });
   };
   return (

@@ -853,3 +853,99 @@ create index idx_human_assignments_access_code
 
 create index idx_human_assignments_status
     on public.accuracy_human_assignments (status);
+
+-- 用户模型配置表
+create table public.user_model_configs
+(
+    id                uuid                     default uuid_generate_v4() not null
+        primary key,
+    user_id           uuid                                                not null
+        references public.users
+            on delete cascade,
+    name              varchar(100)                                        not null,
+    type              varchar(50)                                         not null,
+    base_url          varchar(255)                                        not null,
+    api_key           varchar(255),
+    model_name        varchar(100)                                        not null,
+    additional_params jsonb                    default '{}'::jsonb,
+    is_active         boolean                  default true,
+    created_at        timestamp with time zone default now(),
+    updated_at        timestamp with time zone default now(),
+    unique (user_id, name)
+);
+
+comment on table public.user_model_configs is '用户大模型配置表';
+comment on column public.user_model_configs.id is '配置唯一标识';
+comment on column public.user_model_configs.user_id is '用户ID';
+comment on column public.user_model_configs.name is '配置名称';
+comment on column public.user_model_configs.type is '模型类型，如openai、siliconflow等';
+comment on column public.user_model_configs.base_url is '模型API地址';
+comment on column public.user_model_configs.api_key is 'API密钥';
+comment on column public.user_model_configs.model_name is '模型名称';
+comment on column public.user_model_configs.additional_params is '额外参数配置';
+comment on column public.user_model_configs.is_active is '是否启用';
+comment on column public.user_model_configs.created_at is '创建时间';
+comment on column public.user_model_configs.updated_at is '更新时间';
+
+alter table public.user_model_configs
+    owner to postgres;
+
+create index idx_user_model_configs_user_id
+    on public.user_model_configs (user_id);
+
+create index idx_user_model_configs_type
+    on public.user_model_configs (type);
+
+create index idx_user_model_configs_is_active
+    on public.user_model_configs (is_active);
+
+-- 用户RAG配置表
+create table public.user_rag_configs
+(
+    id                 uuid                     default uuid_generate_v4() not null
+        primary key,
+    user_id            uuid                                                not null
+        references public.users
+            on delete cascade,
+    name               varchar(100)                                        not null,
+    type               varchar(50)                                         not null,
+    url                varchar(255)                                        not null,
+    api_key            varchar(255),
+    request_headers    jsonb                    default '{}'::jsonb,
+    request_template   jsonb                    default '{}'::jsonb,
+    response_path      varchar(200),
+    stream_event_field varchar(100),
+    stream_event_value varchar(100),
+    is_active          boolean                  default true,
+    created_at         timestamp with time zone default now(),
+    updated_at         timestamp with time zone default now(),
+    unique (user_id, name)
+);
+
+comment on table public.user_rag_configs is '用户RAG系统配置表';
+comment on column public.user_rag_configs.id is '配置唯一标识';
+comment on column public.user_rag_configs.user_id is '用户ID';
+comment on column public.user_rag_configs.name is '配置名称';
+comment on column public.user_rag_configs.type is 'RAG类型，如dify_chatflow、ragflow等';
+comment on column public.user_rag_configs.url is 'RAG接口地址';
+comment on column public.user_rag_configs.api_key is 'API密钥';
+comment on column public.user_rag_configs.request_headers is '请求头配置';
+comment on column public.user_rag_configs.request_template is '请求体模板';
+comment on column public.user_rag_configs.response_path is '响应数据路径';
+comment on column public.user_rag_configs.stream_event_field is '流式事件字段';
+comment on column public.user_rag_configs.stream_event_value is '流式事件取值';
+comment on column public.user_rag_configs.is_active is '是否启用';
+comment on column public.user_rag_configs.created_at is '创建时间';
+comment on column public.user_rag_configs.updated_at is '更新时间';
+
+alter table public.user_rag_configs
+    owner to postgres;
+
+create index idx_user_rag_configs_user_id
+    on public.user_rag_configs (user_id);
+
+create index idx_user_rag_configs_type
+    on public.user_rag_configs (type);
+
+create index idx_user_rag_configs_is_active
+    on public.user_rag_configs (is_active);
