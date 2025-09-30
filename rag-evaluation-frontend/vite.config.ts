@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: '0.0.0.0',
-    port:5173,
+    port:5173,// 写死端口
     proxy: {
       // 将所有 /api 开头的请求代理到后端服务器
       '/api': {
@@ -36,6 +36,7 @@ export default defineConfig({
       '@router': path.resolve(__dirname, 'src/router'),
       '@config': path.resolve(__dirname, 'src/config'),
       '@context': path.resolve(__dirname, 'src/context'),
+      '@services': path.resolve(__dirname, 'src/services'),
     }
   }
 })
