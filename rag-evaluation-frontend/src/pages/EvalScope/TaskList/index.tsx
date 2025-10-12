@@ -28,6 +28,7 @@ import {
 } from '@ant-design/icons';
 import type { EvalTask } from '../../../types/evalscope.types';
 import { evalscopeService } from '../../../services/evalscope.service';
+import SharedTaskPollingManager from '../../../hooks/useSharedTaskPolling';
 
 const { Search } = Input;
 
@@ -46,6 +47,32 @@ const TaskListPage: React.FC = () => {
   useEffect(() => {
     loadTasks();
   }, [current, statusFilter]);
+
+  // 使用共享轮询机制更新运行中的任务
+  const runningTaskIds = tasks.filter(task => task.status === 'running').map(task => task.id);
+  
+  // 为每个运行中的任务订阅更新
+  useEffect(() => {
+    if (runningTaskIds.length === 0) return;
+
+    const manager = SharedTaskPollingManager.getInstance();
+    const unsubscribeFunctions: (() => void)[] = [];
+
+    runningTaskIds.forEach(taskId => {
+      const unsubscribe = manager.subscribe(taskId, (updatedTask) => {
+        setTasks(prevTasks => 
+          prevTasks.map(task => 
+            task.id === taskId ? updatedTask as EvalTask : task
+          )
+        );
+      });
+      unsubscribeFunctions.push(unsubscribe);
+    });
+
+    return () => {
+      unsubscribeFunctions.forEach(unsubscribe => unsubscribe());
+    };
+  }, [runningTaskIds.join(',')]); // 依赖运行中任务的ID列表
 
   // 验证所有任务的模型状态
   useEffect(() => {

@@ -282,7 +282,8 @@ async def get_benchmarks(
             cache_status=b.get('cache_status', 'not_cached'),
             download_progress=b.get('download_progress'),
             file_size=b.get('file_size'),
-            last_updated=b.get('last_updated')
+            last_updated=b.get('last_updated'),
+            cache_path=b.get('cache_path')
         )
         for b in benchmarks
     ]

@@ -62,6 +62,7 @@ interface BenchmarkInfo {
   download_progress?: number;
   file_size?: string;
   last_updated?: string;
+  cache_path?: string;
 }
 
 const BenchmarkHubPage: React.FC = () => {
@@ -815,6 +816,13 @@ const BenchmarkHubPage: React.FC = () => {
                 {selectedBenchmark.file_size && (
                   <Descriptions.Item label="文件大小" span={2}>
                     {selectedBenchmark.file_size}
+              </Descriptions.Item>
+                )}
+                {selectedBenchmark.cache_path && (
+                  <Descriptions.Item label="缓存路径" span={2}>
+                    <Text code copyable={{ text: selectedBenchmark.cache_path }}>
+                      {selectedBenchmark.cache_path}
+                    </Text>
               </Descriptions.Item>
                 )}
               <Descriptions.Item label="标签" span={2}>

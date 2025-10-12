@@ -31,6 +31,7 @@ import { formatRunningTime } from '../../../utils/timeFormat';
 import type { EvalTaskDetail, WebSocketMessage } from '@/types/evalscope.types';
 import { evalscopeService } from '@/services/evalscope.service';
 import { useEvalTaskWebSocket } from '@/hooks/useEvalTaskWebSocket';
+import { useSharedTaskPolling } from '@/hooks/useSharedTaskPolling';
 import DetailedProgressComponent from '../../../components/DetailedProgress';
 
 const TaskMonitorPage: React.FC = () => {
@@ -42,16 +43,18 @@ const TaskMonitorPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
   
-  // 实时刷新任务状态
+  // 使用共享轮询机制
+  const { refreshTask } = useSharedTaskPolling(taskId, {
+    enabled: true,
+    onTaskUpdate: (updatedTask) => {
+      setTask(updatedTask as EvalTaskDetail);
+    }
+  });
+
+  // 初始加载任务
   useEffect(() => {
     loadTask();
-    
-    // 如果任务正在运行，更频繁地刷新
-    const refreshInterval = task?.status === 'running' ? 2000 : 5000;
-    const interval = setInterval(loadTask, refreshInterval);
-    
-    return () => clearInterval(interval);
-  }, [taskId, task?.status]);
+  }, [taskId]);
 
   // 根据任务状态生成日志
   useEffect(() => {
@@ -124,7 +127,8 @@ const TaskMonitorPage: React.FC = () => {
   const handleCancel = async () => {
     try {
       await evalscopeService.cancelTask(taskId);
-      loadTask();
+      // 使用共享轮询的刷新方法
+      await refreshTask();
     } catch (error) {
       //
     }
@@ -176,7 +180,7 @@ const TaskMonitorPage: React.FC = () => {
           >
             返回列表
           </Button>
-          <Button icon={<ReloadOutlined />} onClick={loadTask}>
+          <Button icon={<ReloadOutlined />} onClick={refreshTask}>
             刷新
           </Button>
           {task.status === 'running' && (

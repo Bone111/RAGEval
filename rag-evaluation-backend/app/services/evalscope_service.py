@@ -466,7 +466,8 @@ def get_available_benchmarks(
             'cache_status': status['cache_status'] if status else 'not_cached',
             'download_progress': status.get('download_progress') if status else None,
             'last_updated': status.get('last_updated') if status else None,
-            'error_message': status.get('error_message') if status else None
+            'error_message': status.get('error_message') if status else None,
+            'cache_path': status.get('cache_path') if status else None
         }
         
         benchmarks.append(benchmark_data)
@@ -674,6 +675,9 @@ def get_benchmark_status(benchmark_name: str):
         cached_status.update({
             'file_size': all_benchmarks[benchmark_name].get('file_size'),
         })
+        # 添加缓存路径
+        cache_dir = os.path.expanduser(f'~/.cache/modelscope/datasets/{benchmark_name}')
+        cached_status['cache_path'] = cache_dir
         return cached_status
     
     # 检查本地是否已缓存
@@ -688,7 +692,8 @@ def get_benchmark_status(benchmark_name: str):
         'download_progress': 100 if is_cached else None,
         'file_size': all_benchmarks[benchmark_name].get('file_size'),
         'last_updated': None,
-        'error_message': None
+        'error_message': None,
+        'cache_path': cache_dir
     }
     
     # 如果已缓存，获取最后修改时间

@@ -96,6 +96,7 @@ class BenchmarkInfo(BaseModel):
     download_progress: Optional[int] = None
     file_size: Optional[str] = None
     last_updated: Optional[str] = None
+    cache_path: Optional[str] = None
 
 
 class BenchmarkListResponse(BaseModel):

@@ -120,6 +120,13 @@ function start_backend() {
   fi
   
   print_info "启动命令: uvicorn app.main:app --reload --host 0.0.0.0 --port $BACKEND_PORT"
+  # 加载.env文件中的环境变量
+  if [ -f ".env" ]; then
+    print_info "加载.env文件中的环境变量..."
+    set -a  # 自动导出变量
+    source .env
+    set +a  # 关闭自动导出
+  fi
   PYTHONPATH=. uvicorn app.main:app --reload --host 0.0.0.0 --port $BACKEND_PORT &
   BACKEND_PID=$!
   cd ..
