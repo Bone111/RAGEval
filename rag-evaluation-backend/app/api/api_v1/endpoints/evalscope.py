@@ -200,6 +200,131 @@ async def get_task(
     return task
 
 
+@router.get("/tasks/{task_id}/dataset-progress")
+async def get_task_dataset_progress(
+    task_id: int,
+    db: Session = Depends(deps.get_db)
+):
+    """获取任务的数据集进度详情"""
+    task = db.query(EvalScopeTask).filter(EvalScopeTask.id == task_id).first()
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    
+    import os
+    from pathlib import Path
+    
+    dataset_progress = {}
+    
+    # 数据集配置映射（从配置文件获取subset_list）
+    dataset_configs = {
+        'gsm8k': {'subsets': ['main'], 'limit': 5},
+        'math_500': {'subsets': ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5'], 'limit': 5},
+        'competition_math': {'subsets': ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5'], 'limit': 5},
+        'mmlu': {'subsets': [
+            'abstract_algebra', 'anatomy', 'astronomy', 'business_ethics', 'clinical_knowledge',
+            'college_biology', 'college_chemistry', 'college_computer_science', 'college_mathematics',
+            'college_physics', 'college_medicine', 'computer_security', 'conceptual_physics',
+            'econometrics', 'electrical_engineering', 'elementary_mathematics', 'formal_logic',
+            'global_facts', 'high_school_biology', 'high_school_chemistry', 'high_school_computer_science',
+            'high_school_european_history', 'high_school_geography', 'high_school_government_and_politics',
+            'high_school_macroeconomics', 'high_school_mathematics', 'high_school_microeconomics',
+            'high_school_physics', 'high_school_psychology', 'high_school_statistics', 'high_school_us_history',
+            'high_school_world_history', 'human_aging', 'human_sexuality', 'international_law',
+            'jurisprudence', 'logical_fallacies', 'machine_learning', 'management', 'marketing',
+            'medical_genetics', 'miscellaneous', 'moral_disputes', 'moral_scenarios', 'nutrition',
+            'philosophy', 'prehistory', 'professional_accounting', 'professional_law', 'professional_medicine',
+            'professional_psychology', 'public_relations', 'security_studies', 'sociology', 'us_foreign_policy',
+            'virology', 'world_religions'
+        ], 'limit': 5},
+        'arc': {'subsets': ['challenge', 'easy'], 'limit': 5}
+    }
+    
+    # 如果task有dataset_args，优先使用
+    if task.dataset_args:
+        for dataset_name, config in task.dataset_args.items():
+            if dataset_name in dataset_configs:
+                dataset_configs[dataset_name]['limit'] = config.get('limit', 5)
+    
+    for dataset_name in task.datasets:
+        if dataset_name not in dataset_configs:
+            continue
+            
+        config = dataset_configs[dataset_name]
+        subsets = config['subsets']
+        limit = config['limit']
+        
+        # 查找predictions目录
+        predictions_dir = None
+        if task.work_dir:
+            # 尝试多个可能的路径
+            possible_paths = [
+                Path(task.work_dir) / dataset_name / "predictions",
+                Path(f"outputs/evalscope_task_{task_id}") / dataset_name / "predictions",
+            ]
+            
+            for path_pattern in possible_paths:
+                if path_pattern.exists():
+                    predictions_dir = path_pattern
+                    break
+            
+            # 如果直接路径不存在，尝试查找带时间戳的路径
+            if not predictions_dir:
+                import glob
+                pattern = f"outputs/evalscope_task_{task_id}/{dataset_name}/*/predictions"
+                matches = glob.glob(pattern)
+                if matches:
+                    predictions_dir = Path(matches[0])
+                    # 查找模型子目录
+                    model_dirs = list(predictions_dir.glob("*"))
+                    if model_dirs:
+                        predictions_dir = model_dirs[0]  # 使用第一个模型目录
+        
+        subset_progress = {}
+        total_completed = 0
+        total_expected = len(subsets) * limit
+        
+        if predictions_dir and predictions_dir.exists():
+            # 检查每个子集的预测文件
+            for subset in subsets:
+                subset_file = predictions_dir / f"{dataset_name}_{subset}.jsonl"
+                if subset_file.exists():
+                    try:
+                        with open(subset_file, 'r', encoding='utf-8') as f:
+                            completed_samples = len(f.readlines())
+                    except:
+                        completed_samples = 0
+                else:
+                    completed_samples = 0
+                
+                subset_progress[subset] = {
+                    'completed_samples': completed_samples,
+                    'total_samples': limit,
+                    'progress': min(int(completed_samples / limit * 100), 100) if limit > 0 else 0
+                }
+                total_completed += completed_samples
+        else:
+            # 如果没有predictions目录，所有子集进度为0
+            for subset in subsets:
+                subset_progress[subset] = {
+                    'completed_samples': 0,
+                    'total_samples': limit,
+                    'progress': 0
+                }
+        
+        dataset_progress[dataset_name] = {
+            'subsets': subset_progress,
+            'total_completed': total_completed,
+            'total_expected': total_expected,
+            'overall_progress': min(int(total_completed / total_expected * 100), 100) if total_expected > 0 else 0,
+            'status': 'completed' if total_completed >= total_expected else 'running' if total_completed > 0 else 'pending'
+        }
+    
+    return {
+        'task_id': task_id,
+        'dataset_progress': dataset_progress
+    }
+
+
 @router.delete("/tasks/{task_id}")
 async def delete_task(
     task_id: int,

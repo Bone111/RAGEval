@@ -15,7 +15,8 @@ import {
   Button,
   Divider,
   Alert,
-  Spin
+  Spin,
+  Collapse
 } from 'antd';
 import {
   ClockCircleOutlined,
@@ -42,6 +43,7 @@ const TaskMonitorPage: React.FC = () => {
   const [task, setTask] = useState<EvalTaskDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<string[]>([]);
+  const [datasetProgress, setDatasetProgress] = useState<any>(null);
   
   // 使用共享轮询机制
   const { refreshTask } = useSharedTaskPolling(taskId, {
@@ -118,6 +120,16 @@ const TaskMonitorPage: React.FC = () => {
     try {
       const data = await evalscopeService.getTask(taskId);
       setTask(data);
+      
+      // 获取数据集进度详情
+      try {
+        const progressData = await evalscopeService.getTaskDatasetProgress(taskId);
+        setDatasetProgress(progressData);
+      } catch (progressErr) {
+        console.warn('获取数据集进度失败:', progressErr);
+        // 不影响主要功能，只记录警告
+      }
+      
       setLoading(false);
     } catch (error) {
       setLoading(false);
@@ -326,26 +338,36 @@ const TaskMonitorPage: React.FC = () => {
           const datasetResults = task.results?.filter(r => r.benchmark === dataset) || [];
           const metricsCount = datasetResults.length;
           
-          // 计算每个数据集的进度
-          const getDatasetProgress = () => {
+          // 获取详细的数据集进度信息
+          const getDatasetProgressInfo = () => {
+            if (datasetProgress?.dataset_progress?.[dataset]) {
+              const progressInfo = datasetProgress.dataset_progress[dataset];
+              return {
+                progress: progressInfo.overall_progress,
+                status: progressInfo.status,
+                subsets: progressInfo.subsets,
+                totalCompleted: progressInfo.total_completed,
+                totalExpected: progressInfo.total_expected
+              };
+            }
+            
+            // 回退到原有逻辑
             if (task.status === 'completed') {
-              return 100;
+              return { progress: 100, status: 'completed', subsets: null };
             } else if (task.status === 'running') {
-              // 如果该数据集已有结果，说明已完成
               if (metricsCount > 0) {
-                return 100;
+                return { progress: 100, status: 'completed', subsets: null };
               } else {
-                // 并行处理中，所有数据集共享整体进度
-                return Math.min(task.progress, 90); // 最多显示90%，避免误导
+                return { progress: Math.min(task.progress, 90), status: 'running', subsets: null };
               }
             } else {
-              return 0;
+              return { progress: 0, status: 'pending', subsets: null };
             }
           };
 
-          const datasetProgress = getDatasetProgress();
-          const isCompleted = datasetProgress === 100 && task.status === 'completed';
-          const isRunning = task.status === 'running' && datasetProgress < 100;
+          const progressInfo = getDatasetProgressInfo();
+          const isCompleted = progressInfo.status === 'completed';
+          const isRunning = progressInfo.status === 'running';
 
           // 获取该数据集的详细指标信息
           const getMetricsDisplay = () => {
@@ -384,11 +406,42 @@ const TaskMonitorPage: React.FC = () => {
                 </Space>
               </div>
               <Progress
-                percent={datasetProgress}
+                percent={progressInfo.progress}
                 size="small"
                 status={isCompleted ? 'success' : isRunning ? 'active' : undefined}
                 strokeColor={isCompleted ? '#52c41a' : isRunning ? '#1890ff' : '#d9d9d9'}
               />
+              
+              {/* 显示样本进度信息 */}
+              {progressInfo.totalCompleted !== undefined && progressInfo.totalExpected !== undefined && (
+                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                  样本进度: {progressInfo.totalCompleted}/{progressInfo.totalExpected}
+                </div>
+              )}
+              
+              {/* 显示子集进度详情 */}
+              {progressInfo.subsets && Object.keys(progressInfo.subsets).length > 1 && (
+                <Collapse size="small" style={{ marginTop: '8px' }}>
+                  <Collapse.Panel header="子集进度详情" key="subsets">
+                    {Object.entries(progressInfo.subsets).map(([subsetName, subsetInfo]: [string, any]) => (
+                      <div key={subsetName} style={{ marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '12px', fontWeight: 'bold' }}>{subsetName}</span>
+                          <span style={{ fontSize: '12px', color: '#666' }}>
+                            {subsetInfo.completed_samples}/{subsetInfo.total_samples}
+                          </span>
+                        </div>
+                        <Progress
+                          percent={subsetInfo.progress}
+                          size="small"
+                          showInfo={false}
+                          strokeColor={subsetInfo.progress === 100 ? '#52c41a' : '#1890ff'}
+                        />
+                      </div>
+                    ))}
+                  </Collapse.Panel>
+                </Collapse>
+              )}
               
               {/* 显示指标详情 */}
               {isCompleted && metricsCount > 0 && (

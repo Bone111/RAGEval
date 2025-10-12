@@ -223,6 +223,14 @@ export const evalscopeService = {
     });
     return response.data;
   },
+
+  /**
+   * 获取任务的数据集进度详情
+   */
+  async getTaskDatasetProgress(taskId: number) {
+    const response = await axiosInstance.get(`/v1/evalscope/tasks/${taskId}/dataset-progress`);
+    return response.data;
+  },
 };
 
 /**

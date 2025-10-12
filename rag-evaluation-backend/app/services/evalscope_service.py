@@ -208,6 +208,13 @@ class EvalScopeService:
         db.commit()
         db.refresh(task)
         
+        # 创建输出目录并设置work_dir
+        from pathlib import Path
+        work_dir = Path(f'./outputs/evalscope_task_{task.id}')
+        work_dir.mkdir(parents=True, exist_ok=True)
+        task.work_dir = str(work_dir)
+        db.commit()
+        
         logger.info(f"✅ 任务创建成功: ID={task.id}, 模型={task.model_id}, 类型={task.eval_type}")
         
         return task

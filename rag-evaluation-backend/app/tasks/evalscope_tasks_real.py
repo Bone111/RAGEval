@@ -570,11 +570,15 @@ def run_real_evaluation_task(self, task_id: int):
         reporter.set_phase('initializing')
         reporter.update_progress(5, "初始化任务")
         
-        # 3. 准备工作目录
-        work_dir = Path(f'./outputs/evalscope_task_{task_id}')
-        work_dir.mkdir(parents=True, exist_ok=True)
-        task.work_dir = str(work_dir)
-        db.commit()
+        # 3. 准备工作目录（如果不存在则创建）
+        if not task.work_dir:
+            work_dir = Path(f'./outputs/evalscope_task_{task_id}')
+            work_dir.mkdir(parents=True, exist_ok=True)
+            task.work_dir = str(work_dir)
+            db.commit()
+        else:
+            work_dir = Path(task.work_dir)
+            work_dir.mkdir(parents=True, exist_ok=True)
         
         reporter.update_progress(10, "准备工作环境")
         
