@@ -222,8 +222,8 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
     try {
       const files = fileList.map(file => file.originFileObj);
       const formData = new FormData();
-      formData.append('file', files[0]);
-      formData.append('token', 'eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiI3NDkwMjY1NiIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc1ODE2MDY3NiwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiIiwib3BlbklkIjpudWxsLCJ1dWlkIjoiOGNkYjk5YjAtNWViOC00OWU3LWJmMTktODYzNTE1ODI1ODY4IiwiZW1haWwiOiIiLCJleHAiOjE3NTkzNzAyNzZ9.c3teWoHL_R0XWY9JxxNzdE4mzVfRFAAjGfuTSdBPhX_dgKV6XLLHmb7KsSuk-7MEaS9eBcIBwayjorqAMuxbZQ');
+      formData.append('file', files[0]);//mineru秘钥
+      formData.append('token', 'eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiI3NDkwMjY1NiIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc2MDEwMzgyOSwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiIiwib3BlbklkIjpudWxsLCJ1dWlkIjoiNTE2MmFmMTAtOTVlYS00ZmUzLTg3NDItYzY0YmZhYWRlODU0IiwiZW1haWwiOiIiLCJleHAiOjE3NjEzMTM0Mjl9._BpjLphXx8CYxZiEnlNKxWFkG1a8MNdPc2OPZpIW3IJWfotnUGdvyqpMYJ_brCu5eJdSFIMDSQW0RKwALA_3KA');
       formData.append('is_ocr', 'true');
       formData.append('enable_formula', 'false');
       const response = await fetch('/api/v1/mineru/mineru-upload-and-parse', {

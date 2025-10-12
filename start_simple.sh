@@ -6,6 +6,7 @@ cd "$(dirname "$0")"
 # 端口号变量
 BACKEND_PORT=8000
 FRONTEND_PORT=5173
+REDIS_PORT=6379
 
 # 颜色输出
 RED='\033[0;31m'
@@ -44,11 +45,12 @@ function kill_port() {
 
 function usage() {
   echo "用法："
-  echo "  $0 start         # 启动前后端服务"
+  echo "  $0 start         # 启动前后端服务和Celery worker"
   echo "  $0 stop          # 停止所有服务"
   echo "  $0 status        # 检查服务状态"
   echo "  $0 backend       # 只启动后端"
   echo "  $0 frontend      # 只启动前端"
+  echo "  $0 celery        # 只启动Celery worker"
   exit 1
 }
 
@@ -67,6 +69,12 @@ function stop_services() {
   print_info "停止所有服务..."
   kill_port $BACKEND_PORT
   kill_port $FRONTEND_PORT
+  
+  # 停止Celery worker
+  print_info "停止Celery worker..."
+  pkill -f "celery.*evalscope_tasks_optimized.*worker" || true
+  sleep 2
+  
   print_success "所有服务已停止"
 }
 
@@ -84,6 +92,19 @@ function check_status() {
     print_success "前端服务 (端口 $FRONTEND_PORT): 运行中"
   else
     print_warning "前端服务 (端口 $FRONTEND_PORT): 未运行"
+  fi
+  
+  if check_port $REDIS_PORT; then
+    print_success "Redis服务 (端口 $REDIS_PORT): 运行中"
+  else
+    print_warning "Redis服务 (端口 $REDIS_PORT): 未运行"
+  fi
+  
+  # 检查Celery worker
+  if ps aux | grep -E "celery.*evalscope_tasks_optimized.*worker" | grep -v grep > /dev/null; then
+    print_success "Celery worker: 运行中"
+  else
+    print_warning "Celery worker: 未运行"
   fi
 }
 
@@ -143,6 +164,47 @@ function start_frontend() {
   fi
 }
 
+# 启动Celery worker
+function start_celery() {
+  print_info "启动Celery worker..."
+  
+  # 检查Redis是否运行
+  if ! check_port $REDIS_PORT; then
+    print_error "Redis服务未运行，请先启动Redis服务！"
+    print_info "启动Redis: brew services start redis"
+    return 1
+  fi
+  
+  # 停止已有的Celery worker
+  pkill -f "celery.*evalscope_tasks_optimized.*worker" || true
+  sleep 2
+  
+  cd rag-evaluation-backend
+  if [ ! -f "app/tasks/evalscope_tasks_optimized.py" ]; then
+    print_error "找不到 Celery任务模块！"
+    return 1
+  fi
+  
+  # 设置环境变量
+  export CELERY_BROKER_URL=redis://localhost:6379/0
+  export CELERY_RESULT_BACKEND=redis://localhost:6379/0
+  
+  print_info "启动命令: celery -A app.tasks.evalscope_tasks_optimized worker --loglevel=info --concurrency=2"
+  celery -A app.tasks.evalscope_tasks_optimized worker --loglevel=info --concurrency=2 &
+  CELERY_PID=$!
+  cd ..
+  
+  # 等待Celery启动
+  sleep 5
+  if ps aux | grep -E "celery.*evalscope_tasks_optimized.*worker" | grep -v grep > /dev/null; then
+    print_success "Celery worker启动成功！PID: $CELERY_PID"
+    return 0
+  else
+    print_error "Celery worker启动失败！"
+    return 1
+  fi
+}
+
 # 参数处理
 if [ $# -eq 0 ]; then
   usage
@@ -152,23 +214,32 @@ MODE=$1
 
 case $MODE in
   "start")
-    print_info "启动前后端服务..."
+    print_info "启动前后端服务和Celery worker..."
     
     # 启动后端
     if start_backend; then
-      # 启动前端
-      if start_frontend; then
-        print_success "所有服务启动完成！"
-        echo ""
-        echo "=== 服务访问地址 ==="
-        echo "🌐 前端应用: http://localhost:$FRONTEND_PORT"
-        echo "🔧 后端API: http://localhost:$BACKEND_PORT/docs"
-        echo ""
-        echo "使用 '$0 status' 检查服务状态"
-        echo "使用 '$0 stop' 停止所有服务"
-        echo "使用 Ctrl+C 或关闭终端来停止服务"
+      # 启动Celery worker
+      if start_celery; then
+        # 启动前端
+        if start_frontend; then
+          print_success "所有服务启动完成！"
+          echo ""
+          echo "=== 服务访问地址 ==="
+          echo "🌐 前端应用: http://localhost:$FRONTEND_PORT"
+          echo "🔧 后端API: http://localhost:$BACKEND_PORT/docs"
+          echo "⚡ Celery worker: 运行中"
+          echo ""
+          echo "使用 '$0 status' 检查服务状态"
+          echo "使用 '$0 stop' 停止所有服务"
+          echo "使用 Ctrl+C 或关闭终端来停止服务"
+        else
+          print_error "前端启动失败，停止其他服务"
+          kill_port $BACKEND_PORT
+          pkill -f "celery.*evalscope_tasks_optimized.*worker" || true
+          exit 1
+        fi
       else
-        print_error "前端启动失败，停止后端服务"
+        print_error "Celery worker启动失败，停止后端服务"
         kill_port $BACKEND_PORT
         exit 1
       fi
@@ -195,6 +266,12 @@ case $MODE in
   "frontend")
     start_frontend  
     echo "前端服务已启动，按 Ctrl+C 停止"
+    wait
+    ;;
+    
+  "celery")
+    start_celery
+    echo "Celery worker已启动，按 Ctrl+C 停止"
     wait
     ;;
     

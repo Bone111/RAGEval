@@ -1,0 +1,653 @@
+/* 大模型统一管理样式 */
+
+.model-management-layout {
+  min-height: 100vh;
+  background: #f0f2f5;
+  overflow-x: auto; /* 允许水平滚动 */
+}
+
+.model-management-header {
+  background: #001529;
+  padding: 0 24px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.model-management-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+  background: white;
+  padding: 0 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 64px; /* 适配header高度 */
+  z-index: 99;
+}
+
+.model-management-tabs .ant-tabs-content-holder {
+  background: transparent;
+  padding: 24px;
+  min-height: calc(100vh - 200px); /* 确保内容区域有足够高度 */
+}
+
+/* 统计卡片样式 */
+.model-management-layout .ant-statistic {
+  text-align: center;
+}
+
+.model-management-layout .ant-statistic-title {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.model-management-layout .ant-statistic-content {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+/* 卡片样式优化 */
+.model-management-layout .ant-card {
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid #e8e8e8;
+  transition: all 0.3s;
+}
+
+.model-management-layout .ant-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+
+/* 表格样式 */
+.model-management-layout .ant-table-thead > tr > th {
+  background: #fafafa;
+  border-bottom: 2px solid #e8e8e8;
+  font-weight: 600;
+  color: #262626;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.model-management-layout .ant-table-tbody > tr:hover > td {
+  background: #f5f5f5 !important;
+}
+
+/* 表格容器样式 - 优化响应式布局 */
+.model-management-layout .ant-table-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.model-management-layout .ant-table {
+  min-width: 670px; /* 大幅减少最小宽度，适配更多屏幕 */
+}
+
+.model-management-layout .ant-table-thead > tr > th {
+  white-space: nowrap; /* 防止表头文字换行 */
+  padding: 8px 12px; /* 减少内边距 */
+  font-size: 13px;
+}
+
+.model-management-layout .ant-table-tbody > tr > td {
+  word-wrap: break-word; /* 允许单元格内容换行 */
+  vertical-align: top; /* 顶部对齐 */
+  padding: 8px 12px; /* 减少内边距 */
+}
+
+/* 紧凑型表格样式 */
+.model-management-layout .ant-table-middle .ant-table-tbody > tr > td {
+  padding: 6px 8px;
+}
+
+.model-management-layout .ant-table-middle .ant-table-thead > tr > th {
+  padding: 8px 8px;
+}
+
+/* 模型信息列特殊样式 */
+.model-info-cell {
+  min-width: 240px;
+  max-width: 280px;
+}
+
+.model-info-name {
+  font-weight: 500;
+  margin-bottom: 4px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.model-info-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.model-info-tags .ant-tag {
+  margin: 0;
+  font-size: 10px;
+  line-height: 16px;
+  padding: 0 4px;
+  border-radius: 2px;
+}
+
+/* 使用统计列样式 */
+.usage-stats-cell {
+  text-align: left;
+  min-width: 100px;
+}
+
+.usage-count {
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.usage-date {
+  font-size: 10px;
+  color: #999;
+  line-height: 1.2;
+  margin-bottom: 4px;
+}
+
+.usage-rating {
+  margin-top: 4px;
+}
+
+.usage-rating .ant-rate {
+  font-size: 10px;
+  line-height: 1;
+}
+
+/* 状态列样式 */
+.status-cell {
+  min-width: 80px;
+}
+
+.status-cell .ant-badge {
+  font-size: 12px;
+}
+
+.status-cell .ant-progress {
+  margin-top: 4px;
+}
+
+/* 大小列样式 */
+.size-cell {
+  text-align: left;
+  min-width: 60px;
+  font-size: 12px;
+  font-family: 'SF Mono', Monaco, 'Roboto Mono', monospace;
+}
+
+/* 操作列样式 */
+.actions-cell {
+  min-width: 80px;
+}
+
+.actions-cell .ant-space {
+  justify-content: center;
+}
+
+.actions-cell .ant-btn {
+  padding: 2px 4px;
+  height: 24px;
+  width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.actions-cell .ant-btn .anticon {
+  font-size: 12px;
+}
+
+/* 状态徽章样式 */
+.ant-badge-status-success {
+  background-color: #52c41a;
+}
+
+.ant-badge-status-processing {
+  background-color: #1890ff;
+}
+
+.ant-badge-status-error {
+  background-color: #ff4d4f;
+}
+
+.ant-badge-status-warning {
+  background-color: #faad14;
+}
+
+.ant-badge-status-default {
+  background-color: #d9d9d9;
+}
+
+/* 进度条样式 */
+.model-management-layout .ant-progress-line {
+  margin: 0;
+}
+
+.model-management-layout .ant-progress-text {
+  font-size: 10px;
+  color: #666;
+}
+
+/* 标签样式 */
+.model-management-layout .ant-tag {
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 20px;
+  margin: 0 4px 4px 0;
+}
+
+/* 评分样式 */
+.model-management-layout .ant-rate {
+  font-size: 12px;
+  color: #fadb14;
+}
+
+.model-management-layout .ant-rate-star:not(.ant-rate-star-zero) .ant-rate-star-first,
+.model-management-layout .ant-rate-star:not(.ant-rate-star-zero) .ant-rate-star-second {
+  color: #fadb14;
+}
+
+/* 模型卡片样式 */
+.model-card {
+  border-radius: 8px;
+  border: 1px solid #e8e8e8;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.model-card:hover {
+  border-color: #1890ff;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.15);
+}
+
+.model-card-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.model-card-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  margin-right: 12px;
+  background: #f0f2f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+}
+
+.model-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #262626;
+  margin: 0;
+}
+
+.model-card-subtitle {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin: 4px 0;
+}
+
+.model-card-tags {
+  margin: 8px 0;
+}
+
+.model-card-stats {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #595959;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* 响应式设计 - 优化各种屏幕尺寸 */
+
+/* 平板设备 */
+@media (max-width: 1024px) {
+  .model-management-layout .ant-table {
+    min-width: 600px; /* 平板减少最小宽度 */
+  }
+  
+  .model-info-cell {
+    min-width: 200px;
+    max-width: 240px;
+  }
+  
+  .usage-stats-cell {
+    min-width: 90px;
+  }
+  
+  .actions-cell {
+    min-width: 70px;
+  }
+}
+
+/* 小屏设备 */
+@media (max-width: 768px) {
+  .model-management-header {
+    padding: 0 16px;
+  }
+  
+  .model-management-layout .ant-layout-content {
+    padding: 16px;
+  }
+  
+  .model-management-tabs .ant-tabs-nav {
+    padding: 0 16px;
+    position: relative; /* 移动端取消sticky */
+    top: auto;
+  }
+  
+  .model-management-tabs .ant-tabs-content-holder {
+    padding: 16px;
+    min-height: auto;
+  }
+  
+  .model-management-layout .ant-statistic-content {
+    font-size: 20px;
+  }
+  
+  .model-management-layout .ant-table {
+    min-width: 550px; /* 进一步减少最小宽度 */
+    font-size: 12px;
+  }
+  
+  .model-info-cell {
+    min-width: 180px;
+    max-width: 200px;
+  }
+  
+  .usage-stats-cell {
+    min-width: 80px;
+  }
+  
+  .status-cell {
+    min-width: 70px;
+  }
+  
+  .size-cell {
+    min-width: 50px;
+  }
+  
+  .actions-cell {
+    min-width: 60px;
+  }
+  
+  /* 隐藏较长的模型路径显示 */
+  .model-info-tags {
+    display: none;
+  }
+}
+
+/* 手机设备 */
+@media (max-width: 576px) {
+  .model-management-header .ant-typography {
+    font-size: 18px !important;
+  }
+  
+  .model-management-layout .ant-col {
+    margin-bottom: 16px;
+  }
+  
+  .model-management-layout .ant-table {
+    min-width: 480px; /* 手机端最小宽度 */
+    font-size: 11px;
+  }
+  
+  .model-management-layout .ant-statistic-content {
+    font-size: 18px;
+  }
+  
+  .model-info-cell {
+    min-width: 140px;
+    max-width: 160px;
+  }
+  
+  .model-info-name {
+    font-size: 12px;
+    line-height: 1.2;
+  }
+  
+  .usage-stats-cell {
+    min-width: 60px;
+  }
+  
+  .usage-count {
+    font-size: 14px;
+  }
+  
+  .usage-date {
+    font-size: 9px;
+  }
+  
+  .status-cell {
+    min-width: 60px;
+  }
+  
+  .size-cell {
+    min-width: 45px;
+    font-size: 10px;
+  }
+  
+  .actions-cell {
+    min-width: 50px;
+  }
+  
+  .actions-cell .ant-btn {
+    height: 20px;
+    width: 20px;
+  }
+  
+  .actions-cell .ant-btn .anticon {
+    font-size: 10px;
+  }
+  
+  /* 进一步简化显示 */
+  .usage-rating {
+    display: none;
+  }
+}
+
+/* 超小屏设备 */
+@media (max-width: 480px) {
+  .model-management-layout .ant-table {
+    min-width: 420px;
+  }
+  
+  .model-info-cell {
+    min-width: 120px;
+    max-width: 140px;
+  }
+  
+  .usage-stats-cell {
+    min-width: 50px;
+  }
+  
+  .status-cell {
+    min-width: 50px;
+  }
+  
+  .size-cell {
+    display: none; /* 超小屏隐藏大小列 */
+  }
+  
+  .actions-cell {
+    min-width: 45px;
+  }
+}
+
+/* 空状态样式 */
+.model-management-layout .ant-empty {
+  padding: 40px 20px;
+}
+
+.model-management-layout .ant-empty-description {
+  color: #8c8c8c;
+}
+
+/* 搜索和筛选样式 */
+.model-filters {
+  background: white;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+/* 收藏按钮样式 */
+.favorite-button {
+  color: #d9d9d9;
+  transition: color 0.3s;
+}
+
+.favorite-button.favorited {
+  color: #fadb14;
+}
+
+.favorite-button:hover {
+  color: #fadb14;
+}
+
+/* 状态指示器 */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-indicator .ant-progress {
+  margin: 0;
+}
+
+/* 模型类型图标 */
+.model-type-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: #f0f2f5;
+  color: #666;
+}
+
+/* 操作按钮组 */
+.action-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.action-buttons .ant-btn {
+  padding: 4px 8px;
+  height: auto;
+  line-height: 1.4;
+}
+
+/* 路径显示样式 */
+.model-path-display {
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background-color: #f5f5f5;
+  border: 1px solid #e8e8e8;
+  transition: all 0.3s;
+  font-family: monospace;
+  font-size: 11px;
+  color: #666;
+  word-break: break-all;
+}
+
+.model-path-display:hover {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+  color: #1890ff;
+}
+
+.model-path-display:active {
+  background-color: #bae7ff;
+  border-color: #096dd9;
+}
+
+/* 详情模态框样式 */
+.model-detail-modal .ant-descriptions-item-label {
+  background: #fafafa;
+  font-weight: 600;
+}
+
+.model-detail-modal .ant-descriptions-item-content {
+  background: white;
+}
+
+/* 加载状态 */
+.loading-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+/* 工具提示样式 */
+.model-management-layout .ant-tooltip-inner {
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+/* 分页样式 */
+.model-management-layout .ant-pagination {
+  margin-top: 24px;
+  text-align: right;
+}
+
+.model-management-layout .ant-pagination-item {
+  border-radius: 4px;
+}
+
+.model-management-layout .ant-pagination-item-active {
+  border-color: #1890ff;
+  background: #1890ff;
+}
+
+.model-management-layout .ant-pagination-item-active a {
+  color: white;
+}
+
+/* 自定义滚动条 */
+.model-management-layout ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.model-management-layout ::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 3px;
+}
+
+.model-management-layout ::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+.model-management-layout ::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}

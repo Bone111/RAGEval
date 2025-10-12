@@ -1,0 +1,118 @@
+/* 模型选择下拉框样式 */
+
+.model-select-dropdown {
+  background: #ffffff !important;
+  border: 1px solid #d9d9d9 !important;
+  border-radius: 6px !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.model-select-dropdown .ant-select-item {
+  background: #ffffff !important;
+  color: #1a1a1a !important;
+  padding: 8px 12px !important;
+  border: none !important;
+  line-height: 1.5 !important;
+}
+
+.model-select-dropdown .ant-select-item:hover {
+  background: #f0f9ff !important;
+}
+
+.model-select-dropdown .ant-select-item-option-selected {
+  background: #e6f7ff !important;
+  color: #1890ff !important;
+  font-weight: 600 !important;
+}
+
+.model-select-dropdown .ant-select-item-group {
+  color: #1a1a1a !important;
+  font-weight: 600 !important;
+  font-size: 13px !important;
+  padding: 8px 12px 4px 12px !important;
+  background: #fafafa !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+}
+
+.model-select-dropdown .ant-select-item-group-list {
+  background: #ffffff !important;
+}
+
+.model-select-dropdown .ant-select-item-option-content {
+  color: #1a1a1a !important;
+  font-size: 14px !important;
+}
+
+/* 确保选项文字可见 */
+.model-select-dropdown .ant-select-item-option {
+  color: #1a1a1a !important;
+  background: #ffffff !important;
+}
+
+.model-select-dropdown .ant-select-item-option:hover {
+  background: #f0f9ff !important;
+  color: #1890ff !important;
+}
+
+.model-select-dropdown .ant-select-item-option-active {
+  background: #f0f9ff !important;
+  color: #1890ff !important;
+}
+
+/* 确保选项内容正确显示 */
+.model-select-dropdown .ant-select-item-option {
+  min-height: 40px !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.model-select-dropdown .ant-select-item-option-content {
+  flex: 1 !important;
+  overflow: hidden !important;
+}
+
+/* 分组标题样式 */
+.model-select-dropdown .ant-select-item-group .ant-select-item-group-list .ant-select-item {
+  padding-left: 24px !important;
+}
+
+/* 搜索框样式 */
+.model-select-dropdown .ant-select-dropdown-search {
+  background: #ffffff !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+  padding: 8px !important;
+}
+
+.model-select-dropdown .ant-select-dropdown-search .ant-input {
+  color: #1a1a1a !important;
+  background: #ffffff !important;
+  border: 1px solid #d9d9d9 !important;
+}
+
+/* 空状态样式 */
+.model-select-dropdown .ant-empty {
+  color: #666666 !important;
+}
+
+.model-select-dropdown .ant-empty-description {
+  color: #8c8c8c !important;
+}
+
+/* 滚动条样式 */
+.model-select-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.model-select-dropdown::-webkit-scrollbar-track {
+  background: #f0f0f0;
+  border-radius: 3px;
+}
+
+.model-select-dropdown::-webkit-scrollbar-thumb {
+  background: #d9d9d9;
+  border-radius: 3px;
+}
+
+.model-select-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #bfbfbf;
+}

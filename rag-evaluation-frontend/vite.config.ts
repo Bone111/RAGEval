@@ -25,9 +25,10 @@ export default defineConfig({
   },
   resolve: {
     alias: {
+      '@': path.resolve(__dirname, 'src'),
       '@components': path.resolve(__dirname, 'src/components'),
       '@utils': path.resolve(__dirname, 'src/utils'),
-      '@services': path.resolve(__dirname, 'src/services'), 
+      '@services': path.resolve(__dirname, 'src/services'),
       '@pages': path.resolve(__dirname, 'src/pages'),
       '@hooks': path.resolve(__dirname, 'src/hooks'),
       '@assets': path.resolve(__dirname, 'src/assets'),
@@ -36,7 +37,6 @@ export default defineConfig({
       '@router': path.resolve(__dirname, 'src/router'),
       '@config': path.resolve(__dirname, 'src/config'),
       '@context': path.resolve(__dirname, 'src/context'),
-      '@services': path.resolve(__dirname, 'src/services'),
     }
   }
 })

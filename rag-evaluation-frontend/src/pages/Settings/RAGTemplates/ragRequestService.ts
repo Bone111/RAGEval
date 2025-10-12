@@ -122,7 +122,7 @@ class RAGFlowClient {
     try {
       // 第一次尝试：使用OpenAI SDK直接请求
       const stream = await this.client.chat.completions.create({
-        model: 'model',
+        model: 'qwen-plus-2025-09-11',
         messages: [{ role: 'user', content: question }],
         stream: true,
       });
@@ -157,7 +157,7 @@ class RAGFlowClient {
    */
   private async* streamCompletionViaProxy(question: string) {
     const requestBody = {
-      model: 'model',
+      model: 'qwen-plus-2025-09-11',
       messages: [{ role: 'user', content: question }],
       stream: true,
     };

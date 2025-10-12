@@ -2,7 +2,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_optional_current_user, get_db
 from app.models.user import User
 from app.models.user_config import UserModelConfig, UserRAGConfig
 from app.schemas.user_config import (
@@ -40,12 +40,32 @@ def create_model_config(
 @router.get("/model-configs", response_model=List[UserModelConfigOut])
 def get_model_configs(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_optional_current_user)
 ):
-    """获取用户所有模型配置"""
+    """
+    获取用户所有模型配置（支持可选认证）
+    - 已认证：返回用户的个人配置
+    - 未认证：返回第一个用户的配置（开发模式）
+    """
+    # 如果未认证，使用第一个用户（开发模式）
+    if not current_user:
+        print("DEBUG - 未认证用户请求模型配置，使用第一个用户（开发模式）")
+        from sqlalchemy import text
+        user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
+        if not user_result:
+            print("DEBUG - 数据库中无用户，返回空列表")
+            return []
+        user_id = str(user_result.id)
+        print(f"DEBUG - 使用用户ID: {user_id}")
+    else:
+        user_id = current_user.id
+        print(f"DEBUG - 用户 {current_user.name} 请求模型配置")
+    
     configs = db.query(UserModelConfig).filter(
-        UserModelConfig.user_id == current_user.id
+        UserModelConfig.user_id == user_id,
+        UserModelConfig.is_active == True
     ).order_by(UserModelConfig.created_at.desc()).all()
+    print(f"DEBUG - 找到 {len(configs)} 个模型配置")
     return configs
 
 
@@ -151,12 +171,32 @@ def create_rag_config(
 @router.get("/rag-configs", response_model=List[UserRAGConfigOut])
 def get_rag_configs(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_optional_current_user)
 ):
-    """获取用户所有RAG配置"""
+    """
+    获取用户所有RAG配置（支持可选认证）
+    - 已认证：返回用户的个人配置
+    - 未认证：返回第一个用户的配置（开发模式）
+    """
+    # 如果未认证，使用第一个用户（开发模式）
+    if not current_user:
+        print("DEBUG - 未认证用户请求RAG配置，使用第一个用户（开发模式）")
+        from sqlalchemy import text
+        user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
+        if not user_result:
+            print("DEBUG - 数据库中无用户，返回空列表")
+            return []
+        user_id = str(user_result.id)
+        print(f"DEBUG - 使用用户ID: {user_id}")
+    else:
+        user_id = current_user.id
+        print(f"DEBUG - 用户 {current_user.name} 请求RAG配置")
+    
     configs = db.query(UserRAGConfig).filter(
-        UserRAGConfig.user_id == current_user.id
+        UserRAGConfig.user_id == user_id,
+        UserRAGConfig.is_active == True
     ).order_by(UserRAGConfig.created_at.desc()).all()
+    print(f"DEBUG - 找到 {len(configs)} 个RAG配置")
     return configs
 
 
@@ -305,3 +345,113 @@ def clear_all_configs(
         "deleted_model_configs": model_count,
         "deleted_rag_configs": rag_count
     }
+
+
+# ==================== 模型连接测试（后端代理）====================
+
+@router.post("/model-configs/test-connection")
+async def test_model_connection(
+    config_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_optional_current_user)
+):
+    """测试模型API连接（后端代理，避免CORS问题）"""
+    import requests
+    import json as json_lib
+    
+    print(f"📥 收到测试连接请求")
+    
+    try:
+        base_url = config_data.get('baseUrl') or config_data.get('base_url')
+        api_key = config_data.get('apiKey') or config_data.get('api_key')
+        model_name = config_data.get('modelName') or config_data.get('model_name')
+        additional_params = config_data.get('additionalParams') or config_data.get('additional_params') or {}
+        
+        print(f"📋 参数: base_url={base_url}, model={model_name}")
+        
+        if not base_url:
+            raise HTTPException(status_code=400, detail="缺少 base_url 参数")
+        if not api_key:
+            raise HTTPException(status_code=400, detail="缺少 api_key 参数")
+        if not model_name:
+            raise HTTPException(status_code=400, detail="缺少 model_name 参数")
+        
+        # 解析 additional_params
+        if isinstance(additional_params, str):
+            try:
+                additional_params = json_lib.loads(additional_params)
+            except:
+                additional_params = {}
+        
+        # 构建请求
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+            "User-Agent": "RAGEval/1.0"
+        }
+        
+        # 确保 base_url 格式正确
+        if not base_url.endswith('/'):
+            base_url += '/'
+        
+        # 构建完整URL
+        chat_url = f"{base_url}chat/completions"
+        
+        payload = {
+            "model": model_name,
+            "messages": [
+                {"role": "user", "content": "你好"}
+            ],
+            "max_tokens": 10,
+            **additional_params
+        }
+        
+        print(f"🔗 测试连接: {chat_url}")
+        
+        # 使用requests库（更稳定，兼容性更好）
+        import warnings
+        warnings.filterwarnings('ignore', message='Unverified HTTPS request')
+        
+        response = requests.post(
+            chat_url,
+            headers=headers,
+            json=payload,
+            timeout=30,
+            verify=False  # 跳过SSL验证
+        )
+        
+        print(f"📡 响应状态: {response.status_code}")
+        
+        if response.status_code == 200:
+            result = response.json()
+            content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
+            print(f"✅ 连接成功: {content[:30]}")
+            return {
+                "success": True,
+                "message": "连接成功！",
+                "response": content[:50] if content else "模型返回为空",
+                "status_code": 200
+            }
+        else:
+            error_text = response.text
+            print(f"❌ API错误: {response.status_code} - {error_text[:200]}")
+            return {
+                "success": False,
+                "message": f"API返回错误: {response.status_code}",
+                "error": error_text[:200],
+                "status_code": response.status_code
+            }
+                
+    except requests.exceptions.Timeout:
+        print("⏱️  连接超时")
+        raise HTTPException(status_code=408, detail="连接超时，请检查网络或API地址")
+    except requests.exceptions.ConnectionError as e:
+        print(f"🔌 连接失败: {str(e)}")
+        raise HTTPException(status_code=503, detail=f"无法连接到API，请检查网络连接或API地址")
+    except Exception as e:
+        print(f"❌ 测试连接失败: {str(e)}")
+        print(f"❌ 错误类型: {type(e).__name__}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"测试失败: {str(e)}")

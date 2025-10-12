@@ -128,3 +128,12 @@ yarg==0.1.9
 # llama-index 相关依赖
 llama-index-core>=0.12.0,<0.13.0
 llama-index>=0.12.0,<0.13.0
+
+# PDF生成相关依赖
+reportlab>=4.0.0
+openpyxl>=3.1.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+
+# Markdown处理相关依赖
+markdown>=3.5.0

@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axiosInstance from '../utils/axios';
 import { message } from 'antd';
 import { api } from '../utils/api';
 
@@ -61,14 +61,9 @@ class AuthService {
       
       const data = await response.json();
       
-      // 保存认证信息
-      if (credentials.remember) {
-        localStorage.setItem('access_token', data.access_token);
-        localStorage.setItem('token_type', data.token_type);
-      } else {
-        sessionStorage.setItem('access_token', data.access_token);
-        sessionStorage.setItem('token_type', data.token_type);
-      }
+      // 🔥 简化：直接永久保存到localStorage，不管是否勾选"记住我"
+      localStorage.setItem('access_token', data.access_token);
+      localStorage.setItem('token_type', data.token_type);
       
       this.setToken(data.access_token);
       this.fetchAndStoreUserInfo(); // 登录后立即获取用户信息
@@ -98,11 +93,9 @@ class AuthService {
   }
   
   logout(): void {
+    // 🔥 简化：只清除必要的认证信息
     localStorage.removeItem('access_token');
     localStorage.removeItem('token_type');
-    sessionStorage.removeItem('access_token');
-    sessionStorage.removeItem('token_type');
-    
     localStorage.removeItem(this.tokenKey);
     localStorage.removeItem(this.userInfoKey);
     
@@ -111,21 +104,17 @@ class AuthService {
   }
   
   isAuthenticated(): boolean {
-    return !!(localStorage.getItem('access_token') || sessionStorage.getItem('access_token'));
+    // 🔥 简化：直接检查token是否存在（服务端设置1年过期）
+    return !!this.getToken();
   }
   
   getToken(): string | null {
-    // 首先尝试从sessionStorage获取（未勾选"记住我"的情况）
-    let token = sessionStorage.getItem('access_token');
+    // 🔥 简化：直接从localStorage获取token，不检查过期（服务端设置1年过期）
+    const token = localStorage.getItem('access_token');
     
-    // 如果sessionStorage中没有，尝试从localStorage获取（勾选了"记住我"的情况）
-    if (!token) {
-      token = localStorage.getItem('access_token');
-    }
-    
-    // 如果两处都没有找到令牌，可能是未登录状态
     if (!token) {
       console.log('未找到认证令牌，用户可能未登录');
+      return null;
     }
     
     return token;
@@ -155,11 +144,7 @@ class AuthService {
       const token = this.getToken();
       if (!token) return null;
       
-      const response = await axios.get('/api/v1/users/me', {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const response = await axiosInstance.get('/v1/users/me');
       
       // 处理响应数据，确保id是字符串类型
       const userData = response.data;

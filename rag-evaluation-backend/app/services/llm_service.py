@@ -6,7 +6,30 @@ import re
 
 # llama-index 分块逻辑
 from typing import List
-from llama_index.core.text_splitter import SentenceSplitter
+
+# 使用简单的文本分块实现，避免 llama_index 导入问题
+class SentenceSplitter:
+    def __init__(self, chunk_size=2048, chunk_overlap=50, include_metadata=False):
+        self.chunk_size = chunk_size
+        self.chunk_overlap = chunk_overlap
+        self.include_metadata = include_metadata
+    
+    def split_text(self, text):
+        """简单的文本分块实现"""
+        if not text:
+            return []
+        
+        chunks = []
+        start = 0
+        text_len = len(text)
+        
+        while start < text_len:
+            end = min(start + self.chunk_size, text_len)
+            chunk = text[start:end]
+            chunks.append(chunk)
+            start = end - self.chunk_overlap if end < text_len else end
+        
+        return chunks
 import uuid
 
 def llamaindex_split_files(files: List[dict], chunk_size: int = 2048, chunk_overlap: int = 50, include_metadata: bool = False):
@@ -31,10 +54,24 @@ def llamaindex_split_files(files: List[dict], chunk_size: int = 2048, chunk_over
 class QuestionGenerator:
     """使用大模型生成问答对"""
     
-    def __init__(self, api_key: str, model: str = "gpt-4"):
+    def __init__(self, api_key: str, model: str, base_url: str):
+        """初始化问题生成器
+        
+        Args:
+            api_key: API密钥
+            model: 模型名称（必须提供）
+            base_url: API base URL（必须提供）
+        """
+        if not api_key:
+            raise ValueError("API密钥不能为空")
+        if not model:
+            raise ValueError("模型名称不能为空")
+        if not base_url:
+            raise ValueError("API base_url不能为空")
+            
         self.api_key = api_key
         self.model = model
-        self.base_url = "https://api.openai.com/v1"
+        self.base_url = base_url
         self.headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
@@ -143,7 +180,7 @@ class QuestionGenerator:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(
-                    "https://api.openai.com/v1/models",
+                    f"{self.base_url}/models",
                     headers=self.headers
                 )
                 return response.status_code == 200

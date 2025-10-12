@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Integer, Float, UniqueConstraint
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Integer, Float, UniqueConstraint, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -24,9 +24,9 @@ class RagAnswer(Base):
     character_count = Column(Integer)  # 字符数
     characters_per_second = Column(Float)  # 生成速度(字符/秒)，使用numeric(10,2)
     
-    raw_response = Column(JSONB)  # 原始API响应
+    raw_response = Column(JSON)  # 原始API响应
     # 删除不存在的字段
-    # answer_metadata = Column(JSONB)
+    # answer_metadata = Column(JSON)
     
     version = Column(String(50), nullable=True)  # 版本信息
     
@@ -51,8 +51,8 @@ class ApiConfig(Base):
     name = Column(String(100), nullable=False)
     endpoint_url = Column(String(255), nullable=False)
     auth_type = Column(String(20), default="none")  # none, api_key, basic, oauth
-    auth_config = Column(JSONB)  # 认证配置
-    request_template = Column(JSONB)  # 请求体
-    headers = Column(JSONB)  # 请求头
+    auth_config = Column(JSON)  # 认证配置
+    request_template = Column(JSON)  # 请求体
+    headers = Column(JSON)  # 请求头
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now()) 

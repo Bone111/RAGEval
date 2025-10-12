@@ -62,7 +62,7 @@ class QuestionGenerateRequest(BaseModel):
     count: int = 5
     difficulty: Optional[str] = "medium"
     question_types: Optional[List[str]] = ["factual", "conceptual", "applied"]
-    model: str = "gpt-4"
+    model: str  # 不提供默认值，要求前端必须指定模型
     model_provider: str = "openai"
     save_to_dataset: bool = False
     dataset_id: Optional[str] = None

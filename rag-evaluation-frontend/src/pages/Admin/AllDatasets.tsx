@@ -89,6 +89,7 @@ const AllDatasets: React.FC = () => {
       title: '创建时间',
       dataIndex: 'created_at',
       key: 'created_at',
+      width: 180,
       render: (text: string) => new Date(text).toLocaleString(),
       sorter: (a: Dataset, b: Dataset) => 
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Boolean, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 import uuid
@@ -19,7 +19,7 @@ class UserModelConfig(Base):
     base_url = Column(String(255), nullable=False)
     api_key = Column(String(255), nullable=False)
     model_name = Column(String(100), nullable=False)
-    additional_params = Column(JSONB, default={})  # 额外参数
+    additional_params = Column(JSON, default={})  # 额外参数
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -35,8 +35,8 @@ class UserRAGConfig(Base):
     type = Column(String(50), nullable=False)    # dify_chatflow, dify_flow, ragflow, custom等
     url = Column(String(255), nullable=False)
     api_key = Column(String(255), nullable=True)
-    request_headers = Column(JSONB, default={})
-    request_template = Column(JSONB, default={})
+    request_headers = Column(JSON, default={})
+    request_template = Column(JSON, default={})
     response_path = Column(String(200), nullable=True)
     stream_event_field = Column(String(100), nullable=True)
     stream_event_value = Column(String(100), nullable=True)

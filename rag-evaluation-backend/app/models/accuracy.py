@@ -2,9 +2,9 @@ from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import (
     Column, String, Text, Integer, Float, Boolean, 
-    ForeignKey, DateTime, UniqueConstraint, Numeric, ARRAY
+    ForeignKey, DateTime, UniqueConstraint, Numeric, ARRAY, JSON
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
 
@@ -25,9 +25,9 @@ class AccuracyTest(Base):
     status = Column(String(20), nullable=False, default="created")
     
     # 评测配置信息
-    dimensions = Column(JSONB, nullable=False, default=["accuracy"])
-    weights = Column(JSONB, default={"accuracy": 1.0})
-    model_config_test = Column(JSONB)
+    dimensions = Column(JSON, nullable=False, default=["accuracy"])
+    weights = Column(JSON, default={"accuracy": 1.0})
+    model_config_test = Column(JSON)
     prompt_template = Column(Text)
     version = Column(String(50))
     
@@ -36,10 +36,10 @@ class AccuracyTest(Base):
     processed_questions = Column(Integer, default=0)
     success_questions = Column(Integer, default=0)
     failed_questions = Column(Integer, default=0)
-    batch_settings = Column(JSONB, default={"batch_size": 10, "timeout_seconds": 300})
+    batch_settings = Column(JSON, default={"batch_size": 10, "timeout_seconds": 300})
     
     # 评测结果汇总
-    results_summary = Column(JSONB)
+    results_summary = Column(JSON)
     
     # 时间信息
     created_at = Column(DateTime(timezone=True), default=datetime.utcnow)
@@ -70,27 +70,27 @@ class AccuracyTestItem(Base):
     
     # 最终评分信息
     final_score = Column(Numeric)
-    final_dimension_scores = Column(JSONB)
+    final_dimension_scores = Column(JSON)
     final_evaluation_reason = Column(Text)
     final_evaluation_type = Column(String(20))
     
     # AI评测结果
     ai_score = Column(Numeric)
-    ai_dimension_scores = Column(JSONB)
+    ai_dimension_scores = Column(JSON)
     ai_evaluation_reason = Column(Text)
     ai_evaluation_time = Column(DateTime(timezone=True))
-    ai_raw_response = Column(JSONB)
+    ai_raw_response = Column(JSON)
     
     # 人工评测结果
     human_score = Column(Numeric)
-    human_dimension_scores = Column(JSONB)
+    human_dimension_scores = Column(JSON)
     human_evaluation_reason = Column(Text)
     human_evaluator_id = Column(String(100))
     human_evaluation_time = Column(DateTime(timezone=True))
     
     # 其他元数据
     sequence_number = Column(Integer)
-    item_metadata = Column(JSONB)
+    item_metadata = Column(JSON)
     
     # 关系
     evaluation = relationship("AccuracyTest", back_populates="items")
@@ -113,7 +113,7 @@ class AccuracyHumanAssignment(Base):
     evaluator_email = Column(String(255))
     
     # 分配信息
-    item_ids = Column(JSONB, nullable=False)
+    item_ids = Column(JSON, nullable=False)
     total_items = Column(Integer, nullable=False)
     completed_items = Column(Integer, default=0)
     

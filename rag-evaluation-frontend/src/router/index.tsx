@@ -19,6 +19,22 @@ import UserManagement from '../pages/Admin/UserManagement';
 import AllDatasets from '../pages/Admin/AllDatasets';
 import AllProjects from '../pages/Admin/AllProjects';
 
+// EvalScope页面
+import TaskCreatePage from '../pages/EvalScope/TaskCreate';
+import TaskListPage from '../pages/EvalScope/TaskList';
+import TaskMonitorPage from '../pages/EvalScope/TaskMonitor';
+import TaskResultsPage from '../pages/EvalScope/TaskResults';
+import ModelComparisonPage from '../pages/EvalScope/ModelComparison';
+import SimpleVLMPage from '../pages/EvalScope/VLMEval/SimpleVLM';
+import BenchmarkHubPage from '../pages/EvalScope/BenchmarkHub';
+import ReportGenerationPage from '../pages/EvalScope/ReportGeneration';
+import BatchTasksPage from '../pages/EvalScope/BatchTasks';
+import SystemMonitorPage from '../pages/EvalScope/SystemMonitor';
+import ArenaMobePage from '../pages/EvalScope/ArenaMode';
+
+// 大模型管理页面
+import ModelManagement from '../pages/ModelManagement';
+
 // 受保护的路由组件（使用布局）
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
   if (!authService.isAuthenticated()) {
@@ -176,6 +192,117 @@ const AppRouter = () => {
             </AdminRoute>
           }
         />
+
+        {/* EvalScope路由 */}
+        <Route
+          path="/evalscope"
+          element={
+            <ProtectedRoute>
+              <TaskListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/evalscope/tasks"
+          element={
+            <ProtectedRoute>
+              <TaskListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/evalscope/tasks/create"
+          element={
+            <ProtectedRoute>
+              <TaskCreatePage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/evalscope/tasks/:id"
+          element={
+            <ProtectedRoute>
+              <TaskMonitorPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/evalscope/tasks/:id/results"
+          element={
+            <ProtectedRoute>
+              <TaskResultsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/evalscope/compare"
+          element={
+            <ProtectedRoute>
+              <ModelComparisonPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/evalscope/vlm"
+          element={
+            <ProtectedRoute>
+              <SimpleVLMPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/evalscope/benchmarks"
+          element={
+            <ProtectedRoute>
+              <BenchmarkHubPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/evalscope/reports"
+          element={
+            <ProtectedRoute>
+              <ReportGenerationPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/evalscope/batch"
+          element={
+            <ProtectedRoute>
+              <BatchTasksPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/evalscope/monitor"
+          element={
+            <ProtectedRoute>
+              <SystemMonitorPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/evalscope/arena"
+          element={
+            <ProtectedRoute>
+              <ArenaMobePage />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* 大模型管理路由 */}
+        <Route
+          path="/models"
+          element={
+            <ProtectedRoute>
+              <ModelManagement />
+            </ProtectedRoute>
+          }
+        />
+        
+        {/* 大模型管理路由（测试版本，无需认证） */}
+        <Route path="/models-test" element={<ModelManagement />} />
 
         {/* 默认路由 */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

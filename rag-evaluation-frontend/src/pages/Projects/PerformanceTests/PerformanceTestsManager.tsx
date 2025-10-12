@@ -485,6 +485,7 @@ export const PerformanceTestsManager: React.FC<PerformanceTestsManagerProps> = (
             title: '创建时间',
             dataIndex: 'created_at',
             key: 'created_at',
+            width: 150,
             render: (time) => <span style={{ whiteSpace: 'nowrap' }}><TimeAgo date={time} /></span>
           },
           {

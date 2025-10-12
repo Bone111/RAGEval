@@ -32,7 +32,8 @@ const OpenAIModelConfigModal: React.FC<{
     try {
       const values = await form.validateFields();
       setLoading(true);
-      message.loading('正在测试模型连通性...', 0);
+      const hide = message.loading('正在测试模型连通性...', 0);
+      
       let additionalParams: any = {};
       if (values.additionalParams) {
         try {
@@ -43,20 +44,64 @@ const OpenAIModelConfigModal: React.FC<{
           additionalParams = {};
         }
       }
-      const client = new LLMClient({
-        baseUrl: values.baseUrl,
-        apiKey: values.apiKey,
-        modelName: values.modelName,
-      });
-      const content = await client.chatCompletion({
-        userMessage: '你好',
-        additionalParams,
-      });
-      message.destroy();
-      message.success('连接成功！收到响应: ' + (content ? content.substring(0, 20) + '...' : '无内容'));
-      onSave(values);
+      
+      // 优先使用后端代理测试（避免CORS问题）
+      try {
+        const response = await fetch('/api/v1/user-configs/model-configs/test-connection', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('access_token') || sessionStorage.getItem('access_token')}`
+          },
+          body: JSON.stringify({
+            baseUrl: values.baseUrl,
+            apiKey: values.apiKey,
+            modelName: values.modelName,
+            additionalParams
+          })
+        });
+        
+        hide();
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success) {
+            message.success(`✅ 连接成功！模型响应: ${result.response}`);
+            onSave(values);
+            return;
+          } else {
+            message.error(`❌ ${result.message}: ${result.error || ''}`);
+            return;
+          }
+        } else {
+          const error = await response.json().catch(() => ({ detail: '测试失败' }));
+          message.error(`❌ 连接测试失败: ${error.detail || response.statusText}`);
+          return;
+        }
+      } catch (fetchError: any) {
+        hide();
+        console.warn('后端代理失败，尝试直接连接:', fetchError);
+        
+        // 后端代理失败，尝试直接连接（仅支持CORS的API可用）
+        try {
+          const loadingMsg = message.loading('尝试直接连接...', 0);
+          const client = new LLMClient({
+            baseUrl: values.baseUrl,
+            apiKey: values.apiKey,
+            modelName: values.modelName,
+          });
+          const content = await client.chatCompletion({
+            userMessage: '你好',
+            additionalParams,
+          });
+          loadingMsg();
+          message.success('✅ 连接成功！收到响应: ' + (content ? content.substring(0, 20) + '...' : '无内容'));
+          onSave(values);
+        } catch (directError: any) {
+          message.error(`❌ 连接失败: ${directError.message || '请检查配置或网络'}。提示: 部分API不支持浏览器直接访问，但配置仍可保存使用。`);
+        }
+      }
     } catch (err: any) {
-      message.destroy();
       message.error(err.message || '表单校验失败');
     } finally {
       setLoading(false);
@@ -89,7 +134,7 @@ const OpenAIModelConfigModal: React.FC<{
       title="大模型配置"
       onCancel={onCancel}
       onOk={handleOk}
-      destroyOnClose
+      destroyOnHidden
       width={480}
       okText="保存"
       footer={[

@@ -53,7 +53,7 @@ const RAGFlowChat: React.FC<RAGFlowChatProps> = ({
     
     // 生成请求体模板（RAGFlow使用OpenAI格式）
     const template = {
-      "model": "model",
+      "model": "qwen-plus-2025-09-11",
       "messages": [{ "role": "user", "content": "{{question}}" }],
       "stream": true
     };
@@ -141,7 +141,7 @@ const RAGFlowChat: React.FC<RAGFlowChatProps> = ({
           chatId: 'default-chat',
           url: 'http://localhost:8000/api/v1/chats_openai/default-chat/chat/completions',
           requestHeaders: '{"Content-Type": "application/json"}',
-          requestTemplate: '{"model": "model", "messages": [{"role": "user", "content": "{{question}}"}], "stream": true}',
+          requestTemplate: '{"model": "qwen-plus-2025-09-11", "messages": [{"role": "user", "content": "{{question}}"}], "stream": true}',
           ...initialValues
         }}
       >
@@ -270,7 +270,7 @@ const RAGFlowChat: React.FC<RAGFlowChatProps> = ({
               <b>请求格式</b>：使用标准的OpenAI Chat Completions格式：
               <pre style={{ color: '#000', background: "#f5f5f5", padding: 8, borderRadius: 4, marginTop: 8, fontSize: '12px', margin: 0 }}>
 {`{
-  "model": "model",
+  "model": "qwen-plus-2025-09-11",
   "messages": [{"role": "user", "content": "用户问题"}],
   "stream": true
 }`}

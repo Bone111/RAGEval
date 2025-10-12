@@ -49,3 +49,33 @@ docker_https/
 .cursorrules
 
 .cursor
+
+# 测试相关文件和目录
+tests/
+test_*/
+*_test.py
+test_*.py
+*test*.py
+**/*test*.py
+benchmark_dynamic_loading.md
+test_benchmark_registry.py
+
+# 输出和临时目录
+outputs/
+*.db
+*.sqlite
+*.sqlite3
+.venv/
+.python-version
+
+# 日志文件
+*.log
+backend.log
+celery_worker.log
+frontend.log
+
+# 其他临时文件
+*.tmp
+*.temp
+.temp/
+*.zip

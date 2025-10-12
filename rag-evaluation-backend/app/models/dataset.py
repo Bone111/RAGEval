@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 import uuid
@@ -15,8 +15,8 @@ class Dataset(Base):
     name = Column(String(100), nullable=False)
     description = Column(Text)
     is_public = Column(Boolean, default=False)
-    tags = Column(JSONB, default=list)
-    dataset_metadata = Column(JSONB, default=dict)
+    tags = Column(JSON, default=list)
+    dataset_metadata = Column(JSON, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

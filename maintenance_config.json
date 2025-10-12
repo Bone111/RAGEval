@@ -1,0 +1,24 @@
+{
+    "log_retention_days": 30,
+    "output_retention_days": 7,
+    "max_disk_usage_mb": 2048,
+    "dry_run": false,
+    "log_file": "maintenance_cleanup.log",
+    "notification": {
+        "enable_email": false,
+        "email_to": "admin@example.com",
+        "email_subject": "EvalScope维护报告"
+    },
+    "cleanup_policies": {
+        "delete_orphaned_outputs": true,
+        "delete_old_failed_tasks": true,
+        "delete_old_logs": true,
+        "compress_old_results": false
+    },
+    "thresholds": {
+        "warning_disk_usage_mb": 1536,
+        "critical_disk_usage_mb": 2048,
+        "max_errors_allowed": 10
+    }
+}
+

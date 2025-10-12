@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey
+from sqlalchemy import Column, String, Text, Boolean, DateTime, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 import uuid
@@ -17,10 +17,10 @@ class Project(Base):
     status = Column(String(20), default="created", nullable=False)
     scoring_scale = Column(String(20), default="1-5", nullable=False)
     evaluation_method = Column(String(20), default="auto", nullable=False)
-    settings = Column(JSONB, default={})
+    settings = Column(JSON, default={})
     public = Column(Boolean, default=False)
     # 新增评测维度字段，默认包含四个常见维度
-    evaluation_dimensions = Column(JSONB, default=[
+    evaluation_dimensions = Column(JSON, default=[
         {"name": "accuracy", "weight": 1.0, "description": "评估回答的事实准确性", "enabled": True},
         {"name": "relevance", "weight": 1.0, "description": "评估回答与问题的相关程度", "enabled": True},
         {"name": "completeness", "weight": 1.0, "description": "评估回答信息的完整性", "enabled": True},

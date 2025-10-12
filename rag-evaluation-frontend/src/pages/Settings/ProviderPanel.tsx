@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Modal, Form, Input, Select, Space, message, Popconfirm, Divider, Typography, Row, Col, Tooltip, Alert } from 'antd';
-import { PlusOutlined, DeleteOutlined, SettingOutlined, InfoCircleOutlined, QuestionCircleOutlined, DownOutlined, RightOutlined, ClearOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, SettingOutlined, InfoCircleOutlined, QuestionCircleOutlined, DownOutlined, RightOutlined, ClearOutlined, CopyOutlined } from '@ant-design/icons';
 import { RAG_TEMPLATES } from './RAGTemplates';
 import DifyChatflow from './RAGTemplates/Dify-CHATFLOW';
 import DifyFlow from './RAGTemplates/Dify-FLOW';
@@ -14,7 +14,7 @@ import ConfigStorageStatus from '../../components/ConfigStorageStatus';
 
 const { Title } = Typography;
 
-// 仅支持OpenAI接口规范的大模型
+// 支持多种大模型配置类型
 const MODEL_TEMPLATES = [
   {
     key: 'openai',
@@ -23,9 +23,9 @@ const MODEL_TEMPLATES = [
     logo: '/llm_logo/openai_logo.png',
     defaultConfig: {
       name: '',
-      baseUrl: '',
+      baseUrl: 'https://api.openai.com/v1',
       apiKey: '',
-      modelName: '',
+      modelName: 'gpt-4',
       additionalParams: `{
   "temperature": 0.1,
   "max_tokens": 2048
@@ -36,12 +36,45 @@ const MODEL_TEMPLATES = [
     key: 'siliconflow',
     name: '硅基流动',
     desc: '硅基流动大模型API',
-    logo: '/llm_logo/siliconflow_logo.png', // 需准备logo
+    logo: '/llm_logo/siliconflow_logo.png',
     defaultConfig: {
       name: '硅基流动',
-      baseUrl: 'https://api.siliconflow.cn',
+      baseUrl: 'https://api.siliconflow.cn/v1',
       apiKey: '',
       modelName: 'Qwen/QwQ-32B',
+      additionalParams: `{
+  "temperature": 0.7,
+  "max_tokens": 2048
+}`,
+    }
+  },
+  {
+    key: 'ollama',
+    name: 'Ollama本地模型',
+    desc: '本地部署的Ollama模型服务',
+    logo: '/llm_logo/ollama_logo.png',
+    defaultConfig: {
+      name: 'Ollama本地模型',
+      baseUrl: 'http://localhost:11434/v1',
+      apiKey: 'ollama', // Ollama通常不需要API Key，但保持字段一致
+      modelName: 'llama3.2',
+      additionalParams: `{
+  "temperature": 0.7,
+  "max_tokens": 2048,
+  "stream": false
+}`,
+    }
+  },
+  {
+    key: 'local_api',
+    name: '本地API服务',
+    desc: '本地部署的模型API服务',
+    logo: '/llm_logo/local_api_logo.png',
+    defaultConfig: {
+      name: '本地API服务',
+      baseUrl: 'http://localhost:8000/v1',
+      apiKey: '',
+      modelName: 'local-model',
       additionalParams: `{
   "temperature": 0.7,
   "max_tokens": 2048
@@ -115,6 +148,7 @@ const ProviderPanel: React.FC = () => {
   const [form] = Form.useForm();
   const [currentTemplate, setCurrentTemplate] = useState<any>(null);
   const [currentEditValue, setCurrentEditValue] = useState<any>({});
+  const [currentCopyValue, setCurrentCopyValue] = useState<any>({}); // 存储复制的配置值
   const [marketOpen, setMarketOpen] = useState(true); // 控制配置市场展开/收起
 
   // 加载配置函数
@@ -182,6 +216,7 @@ const ProviderPanel: React.FC = () => {
       }
       setEditIndex(null);
       setModalOpen(false);
+      setCurrentCopyValue({}); // 清空复制值
       message.success('模型配置已保存');
     } catch (error) {
       console.error('保存配置失败:', error);
@@ -200,6 +235,30 @@ const ProviderPanel: React.FC = () => {
       console.error('删除配置失败:', error);
       message.error('删除配置失败');
     }
+  };
+
+  // 复制模型配置
+  const handleCopyModel = (idx: number) => {
+    if (idx < 0 || idx >= modelConfigs.length) {
+      message.error('配置索引无效，请刷新页面重试');
+      return;
+    }
+    
+    const originalConfig = modelConfigs[idx];
+    const template = MODEL_TEMPLATES.find(t => t.key === originalConfig.type) || MODEL_TEMPLATES[0];
+    
+    // 创建复制的配置，名称添加_copy后缀
+    const copiedConfig = {
+      ...originalConfig,
+      name: `${originalConfig.name}_copy`,
+      id: undefined, // 清除ID，让系统生成新的
+    };
+    
+    setModalType('model');
+    setCurrentTemplate(template);
+    setEditIndex(null); // 设置为null表示新增
+    setCurrentCopyValue(copiedConfig); // 存储复制的配置值
+    setModalOpen(true);
   };
 
   // 修改 handleAddRag/handleEditRag 只控制弹窗开关和传递模板/初始值
@@ -255,6 +314,30 @@ const ProviderPanel: React.FC = () => {
     message.success('已删除RAG系统配置');
   };
 
+  // 复制RAG系统配置
+  const handleCopyRag = (idx: number) => {
+    if (idx < 0 || idx >= ragConfigs.length) {
+      message.error('配置索引无效，请刷新页面重试');
+      return;
+    }
+    
+    const originalConfig = ragConfigs[idx];
+    const template = RAG_TEMPLATES.find(t => t.key === originalConfig.type) || RAG_TEMPLATES[0];
+    
+    // 创建复制的配置，名称添加_copy后缀
+    const copiedConfig = {
+      ...originalConfig,
+      name: `${originalConfig.name}_copy`,
+      id: undefined, // 清除ID，让系统生成新的
+    };
+    
+    setModalType('rag');
+    setCurrentTemplate(template);
+    setEditIndex(null); // 设置为null表示新增
+    setCurrentEditValue(copiedConfig);
+    setModalOpen(true);
+  };
+
   // 新增rag保存回调
   const handleRagSave = async (values: any) => {
     try {
@@ -270,6 +353,7 @@ const ProviderPanel: React.FC = () => {
       }
       setRagConfigs(newList);
       setModalOpen(false);
+      setCurrentCopyValue({}); // 清空复制值
       message.success('RAG系统配置已保存');
     } catch (error) {
       console.error('保存RAG配置失败:', error);
@@ -343,7 +427,7 @@ const ProviderPanel: React.FC = () => {
           modelConfigs.map((item, idx) => {
             const tpl = MODEL_TEMPLATES.find(t => t.key === item.type) || MODEL_TEMPLATES[0];
             return (
-              <Card key={idx} style={{ marginBottom: 10, borderRadius: 10 ,background:"#f6f7f9",border:0}} bodyStyle={{ padding: 0,paddingRight:20 }}>
+              <Card key={idx} style={{ marginBottom: 10, borderRadius: 10 ,background:"#f6f7f9",border:0}} styles={{ body: { padding: 0,paddingRight:20 } }}>
               <Row align="middle" justify="start" style={{ minHeight: 64 }}>
                 <Col flex="64px" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                   <img src={tpl.logo} alt="logo" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8 }} />
@@ -363,6 +447,16 @@ const ProviderPanel: React.FC = () => {
                       }}
                     >
                       编辑
+                    </Button>
+                    <Button 
+                      icon={<CopyOutlined />} 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleCopyModel(idx);
+                      }}
+                    >
+                      复制
                     </Button>
                     <Popconfirm 
                       title="确定删除该模型配置？" 
@@ -397,7 +491,7 @@ const ProviderPanel: React.FC = () => {
             // 获取logo和类型名
             const tpl = RAG_TEMPLATES.find(t => t.key === item.type) || RAG_TEMPLATES[0];
             return (
-              <Card key={idx} style={{ marginBottom: 10, borderRadius: 10 ,background:"#f6f7f9",border:0}} bodyStyle={{ padding: 0 ,paddingRight:20}}>
+              <Card key={idx} style={{ marginBottom: 10, borderRadius: 10 ,background:"#f6f7f9",border:0}} styles={{ body: { padding: 0 ,paddingRight:20} }}>
                 <Row align="middle" justify="start" style={{ minHeight: 64 }}>
                   <Col flex="64px" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
                     <img src={tpl.logo} alt="logo" style={{ width: 40, height: 40, objectFit: 'contain', borderRadius: 8 }} />
@@ -417,6 +511,16 @@ const ProviderPanel: React.FC = () => {
                         }}
                       >
                         编辑
+                      </Button>
+                      <Button 
+                        icon={<CopyOutlined />} 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleCopyRag(idx);
+                        }}
+                      >
+                        复制
                       </Button>
                       <Popconfirm 
                         title="确定删除该RAG系统配置？" 
@@ -459,7 +563,7 @@ const ProviderPanel: React.FC = () => {
             <Row gutter={[24, 24]} justify="start" align="top" style={{ marginBottom: 24 }}>
               {MODEL_TEMPLATES.map((tpl, idx) => (
                 <Col key={tpl.key} xs={24} sm={12} md={8} lg={8} xl={8} style={{ display: 'flex' }}>
-                  <Card hoverable style={{ ...cardStyle, padding: 0, width: '100%', minHeight: 180 }} bodyStyle={{ padding: 0, width: '100%' }}>
+                  <Card hoverable style={{ ...cardStyle, padding: 0, width: '100%', minHeight: 180 }} styles={{ body: { padding: 0, width: '100%' } }}>
                     <div style={{ display: 'flex', padding: 16, alignItems: 'flex-start' }}>
                       <img src={tpl.logo} alt={tpl.name} style={{ width: 40, height: 40, borderRadius: 8, background: '#f5f6fa', boxShadow: '0 1px 4px #e0e0e0' }} />
                       <div style={{ marginLeft: 20 }}>
@@ -479,7 +583,7 @@ const ProviderPanel: React.FC = () => {
             <Row gutter={[24, 24]} justify="start" align="top" style={{ marginBottom: 8 }}>
               {RAG_TEMPLATES.map((tpl, idx) => (
                 <Col key={tpl.key} xs={24} sm={12} md={8} lg={8} xl={8} style={{ display: 'flex' }}>
-                  <Card hoverable style={{ ...cardStyle, padding: 0, width: '100%', minHeight: 180 }} bodyStyle={{ padding: 0, width: '100%' }}>
+                  <Card hoverable style={{ ...cardStyle, padding: 0, width: '100%', minHeight: 180 }} styles={{ body: { padding: 0, width: '100%' } }}>
                     <div style={{ display: 'flex', padding: 16, alignItems: 'flex-start' }}>
                       <img src={tpl.logo} alt={tpl.name} style={{ width: 40, height: 40, borderRadius: 8, background: '#f5f6fa', boxShadow: '0 1px 4px #e0e0e0' }} />
                       <div style={{ marginLeft: 20 }}>
@@ -501,19 +605,37 @@ const ProviderPanel: React.FC = () => {
       </div>
       {/* 配置弹窗 */}
       {modalType === 'model' ? (
-        currentTemplate?.key === 'siliconflow' ? (
+        ['ollama', 'local_api', 'openai'].includes(currentTemplate?.key) ? (
+          <OpenAIModelConfigModal
+            open={modalOpen}
+            onCancel={() => {
+              setModalOpen(false);
+              setCurrentCopyValue({}); // 清空复制值
+            }}
+            onSave={handleModelSave}
+            initialValues={editIndex !== null ? modelConfigs[editIndex] : (Object.keys(currentCopyValue).length > 0 ? currentCopyValue : currentTemplate?.defaultConfig)}
+            templateKey={currentTemplate?.key}
+          />
+        ) : currentTemplate?.key === 'siliconflow' ? (
           <SiliconFlowModelConfigModal
             open={modalOpen}
-            onCancel={() => setModalOpen(false)}
+            onCancel={() => {
+              setModalOpen(false);
+              setCurrentCopyValue({}); // 清空复制值
+            }}
             onSave={handleModelSave}
-            initialValues={editIndex !== null ? modelConfigs[editIndex] : currentTemplate?.defaultConfig}
+            initialValues={editIndex !== null ? modelConfigs[editIndex] : (Object.keys(currentCopyValue).length > 0 ? currentCopyValue : currentTemplate?.defaultConfig)}
           />
         ) : (
           <OpenAIModelConfigModal
             open={modalOpen}
-            onCancel={() => setModalOpen(false)}
+            onCancel={() => {
+              setModalOpen(false);
+              setCurrentCopyValue({}); // 清空复制值
+            }}
             onSave={handleModelSave}
-            initialValues={editIndex !== null ? modelConfigs[editIndex] : currentTemplate?.defaultConfig}
+            initialValues={editIndex !== null ? modelConfigs[editIndex] : (Object.keys(currentCopyValue).length > 0 ? currentCopyValue : currentTemplate?.defaultConfig)}
+            templateKey={currentTemplate?.key}
           />
         )
       ) : (
