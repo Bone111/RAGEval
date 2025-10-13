@@ -31,14 +31,14 @@ if settings.BACKEND_CORS_ORIGINS:
 # 包含API路由
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
-# 包含EvalScope路由
+# 包含EvalScope异步路由（优先使用）
 app.include_router(
     evalscope.router,
     prefix=f"{settings.API_V1_STR}/evalscope",
     tags=["evalscope"]
 )
 
-# 包含EvalScope同步路由
+# 包含EvalScope同步路由（备用）
 app.include_router(
     evalscope_sync.router,
     prefix=f"{settings.API_V1_STR}/evalscope",
