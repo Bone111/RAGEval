@@ -116,3 +116,85 @@
 .model-select-dropdown::-webkit-scrollbar-thumb:hover {
   background: #bfbfbf;
 }
+
+/* 修复模型选择输入框文字显示问题 */
+.ant-select-selector {
+  height: auto !important;
+  min-height: 40px !important;
+  padding: 8px 12px !important;
+  line-height: 1.5 !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+.ant-select-selection-item {
+  line-height: 1.5 !important;
+  height: auto !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  font-size: 14px !important;
+}
+
+.ant-select-selection-placeholder {
+  line-height: 1.5 !important;
+  height: auto !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  font-size: 14px !important;
+}
+
+/* 确保输入框内容垂直居中 */
+.ant-select-selection-search {
+  height: auto !important;
+  line-height: 1.5 !important;
+}
+
+.ant-select-selection-search-input {
+  height: auto !important;
+  line-height: 1.5 !important;
+  font-size: 14px !important;
+}
+
+/* 修复所有输入框的文字显示问题 */
+.ant-input {
+  line-height: 1.5 !important;
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+  height: auto !important;
+  min-height: 40px !important;
+}
+
+.ant-input:focus {
+  line-height: 1.5 !important;
+}
+
+.ant-input::placeholder {
+  line-height: 1.5 !important;
+}
+
+/* 修复数字输入框 */
+.ant-input-number {
+  line-height: 1.5 !important;
+}
+
+.ant-input-number-input {
+  line-height: 1.5 !important;
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+  height: auto !important;
+  min-height: 40px !important;
+}
+
+/* 修复文本域 */
+.ant-input-textarea {
+  line-height: 1.5 !important;
+  font-size: 14px !important;
+}
+
+.ant-input-textarea textarea {
+  line-height: 1.5 !important;
+  font-size: 14px !important;
+  padding: 8px 12px !important;
+}

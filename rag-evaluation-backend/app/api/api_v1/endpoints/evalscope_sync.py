@@ -3,7 +3,7 @@ EvalScope同步评测API - 简化版，立即可用
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-import subprocess
+# import subprocess  # 不再使用命令行执行
 import json
 import os
 from datetime import datetime, timezone
@@ -183,7 +183,7 @@ async def create_and_run_task_sync(
 
 def run_eval_in_background(task_id: int, task_data: schemas.TaskCreate):
     """在后台线程中执行评测"""
-    from app.core.database import SessionLocal
+    from app.db.base import SessionLocal
     
     db = SessionLocal()
     try:
@@ -200,9 +200,9 @@ def run_eval_in_background(task_id: int, task_data: schemas.TaskCreate):
         task.progress = 20
         db.commit()
         
-        # 构建命令 (使用conda环境)
-        # 从环境变量获取Python路径，如果未设置则使用当前Python
-        conda_python = os.getenv('EVALSCOPE_PYTHON_PATH', 'python')
+        # 创建工作目录
+        task_output_dir = Path(task.work_dir)
+        task_output_dir.mkdir(parents=True, exist_ok=True)
         
         # 修复模型ID格式问题
         model_id = task.model_id
@@ -229,90 +229,138 @@ def run_eval_in_background(task_id: int, task_data: schemas.TaskCreate):
                 else:
                     raise ValueError(f"本地模型ID无效 ({task.model_id})。请在【大模型管理】中正确配置模型。")
         
-        cmd = [
-            conda_python, '-m', 'evalscope.cli.cli', 'eval',
-            '--model', model_id,
-            '--datasets'
-        ] + task.datasets
+        print(f"使用 Python API 执行评测")
         
-        # 添加limit参数
-        if task_data.limit:
-            cmd.extend(['--limit', str(task_data.limit)])
-        
-        # 添加eval_type参数
-        if task.eval_type:
-            cmd.extend(['--eval-type', task.eval_type])
-            
-        # 如果是API模型，添加API配置
-        if task.eval_type == 'openai_api':
-            # 优先从task.extra_metadata获取配置(数据库中保存的)
-            user_config = None
-            if task.extra_metadata and task.extra_metadata.get('user_model_config'):
-                user_config = task.extra_metadata['user_model_config']
-                print(f"DEBUG: 从task.extra_metadata获取命令行API配置")
-            # 如果extra_metadata中没有,尝试从task_data获取(向后兼容)
-            elif hasattr(task_data, 'user_model_config') and task_data.user_model_config:
-                user_config = task_data.user_model_config
-                print(f"DEBUG: 从task_data获取命令行API配置")
-            
-            if user_config:
-                # 添加API URL (注意：配置中使用的是base_url，而命令行参数是--api-url)
-                api_url = user_config.get('api_url') or user_config.get('base_url')
-                if api_url:
-                    cmd.extend(['--api-url', api_url])
-                    print(f"DEBUG: 添加命令行参数 --api-url {api_url}")
-                
-                # 添加API密钥
-                if user_config.get('api_key'):
-                    cmd.extend(['--api-key', user_config['api_key']])
-                    print(f"DEBUG: 添加命令行参数 --api-key ***")
-            else:
-                print(f"WARNING: 未找到云端模型配置")
-        
-        print(f"执行命令: {' '.join(cmd)}")
-        
-        # 使用subprocess命令行方式（更稳定）
-        # 准备环境变量
-        env = os.environ.copy()
-        
+        # 使用 EvalScope Python API 而不是命令行
         try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,  
-                timeout=600,
-                env=env,
-                cwd=os.getcwd()  # 确保工作目录正确
-            )
+            from evalscope.run import run_task
+            from evalscope.config import TaskConfig
             
-            print(f"命令执行完成，返回码: {result.returncode}")
+            # 构建 TaskConfig 参数
+            config_params = {
+                'model': model_id,
+                'datasets': task.datasets,
+                'eval_type': task.eval_type,
+                'work_dir': str(task_output_dir)
+            }
             
-            if result.returncode != 0:
-                print(f"错误输出: {result.stderr}")
-                task.status = 'failed'
-                task.error_message = f"评测执行失败:\n{result.stderr}"
-                task.completed_at = datetime.now(timezone.utc)
-                db.commit()
-                return  # 后台线程，无需返回值
+            # 添加 limit 参数
+            if hasattr(task_data, 'limit') and task_data.limit:
+                config_params['limit'] = task_data.limit
             
-            print(f"标准输出: {result.stdout[:500]}...")  # 打印前500字符
+            # 添加 API 配置
+            if task.eval_type == 'openai_api':
+                user_config = None
+                if task.extra_metadata and task.extra_metadata.get('user_model_config'):
+                    user_config = task.extra_metadata['user_model_config']
+                elif hasattr(task_data, 'user_model_config') and task_data.user_model_config:
+                    user_config = task_data.user_model_config
+                
+                if user_config:
+                    api_url = user_config.get('api_url') or user_config.get('base_url')
+                    api_key = user_config.get('api_key')
+                    if api_url:
+                        config_params['api_url'] = api_url
+                    if api_key:
+                        config_params['api_key'] = api_key
             
-            # 解析文本结果
-            stdout_lines = result.stdout.split('\n')
-            results_parsed = parse_stdout_for_results(stdout_lines)
+            print(f"TaskConfig 参数: {config_params}")
+            
+            # 创建 TaskConfig 并执行评测
+            task_config = TaskConfig(**config_params)
+            results = run_task(task_config)
+            
+            print(f"Python API 执行完成，结果数量: {len(results) if results else 0}")
+            
+            # 处理结果 - EvalScope返回格式: {dataset_name: Report对象}
+            results_parsed = []
+            if results:
+                print(f"原始结果类型: {type(results)}")
+                print(f"原始结果内容: {results}")
+                
+                if isinstance(results, dict):
+                    # EvalScope返回字典格式: {dataset_name: Report对象}
+                    for dataset_name, report in results.items():
+                        print(f"处理数据集: {dataset_name}, Report类型: {type(report)}")
+                        
+                        # 检查Report对象是否有metrics属性
+                        if hasattr(report, 'metrics') and report.metrics:
+                            for metric in report.metrics:
+                                metric_name = getattr(metric, 'name', 'accuracy')
+                                metric_score = getattr(metric, 'score', 0.0)
+                                metric_num = getattr(metric, 'num', 0)
+                                
+                                # 检查是否有categories和subsets
+                                if hasattr(metric, 'categories') and metric.categories:
+                                    for category in metric.categories:
+                                        category_name = getattr(category, 'name', ['default'])
+                                        if isinstance(category_name, list):
+                                            category_name = category_name[0] if category_name else 'default'
+                                        
+                                        if hasattr(category, 'subsets') and category.subsets:
+                                            for subset in category.subsets:
+                                                subset_name = getattr(subset, 'name', 'main')
+                                                subset_score = getattr(subset, 'score', metric_score)
+                                                subset_num = getattr(subset, 'num', metric_num)
+                                                
+                                                results_parsed.append({
+                                                    'benchmark': dataset_name,
+                                                    'metric_name': metric_name,
+                                                    'metric_value': float(subset_score),
+                                                    'category': category_name,
+                                                    'subset_name': subset_name,
+                                                    'num_samples': subset_num
+                                                })
+                                        else:
+                                            # 没有子集，使用类别级别的数据
+                                            category_score = getattr(category, 'score', metric_score)
+                                            category_num = getattr(category, 'num', metric_num)
+                                            
+                                            results_parsed.append({
+                                                'benchmark': dataset_name,
+                                                'metric_name': metric_name,
+                                                'metric_value': float(category_score),
+                                                'category': category_name,
+                                                'subset_name': 'main',
+                                                'num_samples': category_num
+                                            })
+                                else:
+                                    # 没有类别，使用指标级别的数据
+                                    results_parsed.append({
+                                        'benchmark': dataset_name,
+                                        'metric_name': metric_name,
+                                        'metric_value': float(metric_score),
+                                        'category': 'default',
+                                        'subset_name': 'main',
+                                        'num_samples': metric_num
+                                    })
+                        else:
+                            # 如果没有metrics属性，尝试从Report对象直接提取
+                            if hasattr(report, 'score'):
+                                results_parsed.append({
+                                    'benchmark': dataset_name,
+                                    'metric_name': 'overall_score',
+                                    'metric_value': float(getattr(report, 'score', 0.0)),
+                                    'category': 'default',
+                                    'subset_name': 'main',
+                                    'num_samples': getattr(report, 'num', 0)
+                                })
+                else:
+                    # 如果不是字典，尝试其他格式
+                    print(f"结果不是字典格式，类型: {type(results)}")
+                    if hasattr(results, '__iter__'):
+                        for result in results:
+                            if isinstance(result, dict):
+                                results_parsed.append(result)
+                            else:
+                                print(f"跳过非字典结果: {type(result)}")
             
             print(f"解析到 {len(results_parsed)} 个结果")
-            
-        except subprocess.TimeoutExpired:
-            print("命令执行超时")
-            task.status = 'failed'
-            task.error_message = "评测任务超时（超过10分钟）"
-            task.completed_at = datetime.now(timezone.utc)
-            db.commit()
-            return  # 后台线程，无需返回值
+            if results_parsed:
+                print(f"第一个结果: {results_parsed[0]}")
             
         except Exception as e:
-            print(f"命令执行异常: {e}")
+            print(f"Python API 执行异常: {e}")
             import traceback
             traceback.print_exc()
             task.status = 'failed'
@@ -323,14 +371,27 @@ def run_eval_in_background(task_id: int, task_data: schemas.TaskCreate):
         
         # 保存结果到数据库
         for result_data in results_parsed:
+            # 确保 result_data 是字典类型
+            if not isinstance(result_data, dict):
+                print(f"警告: 结果不是字典类型，跳过: {type(result_data)}")
+                continue
+                
+            # 安全地获取结果字段
+            benchmark = result_data.get('benchmark', result_data.get('dataset', 'unknown'))
+            metric_name = result_data.get('metric_name', result_data.get('metric', 'accuracy'))
+            metric_value = result_data.get('metric_value', result_data.get('score', 0.0))
+            category = result_data.get('category', 'default')
+            subset_name = result_data.get('subset_name', result_data.get('subset', 'main'))
+            num_samples = result_data.get('num_samples', result_data.get('total_samples'))
+            
             eval_result = EvalScopeResult(
                 task_id=task.id,
-                benchmark=result_data['benchmark'],
-                metric_name=result_data['metric_name'],
-                metric_value=result_data['metric_value'],
-                category=result_data.get('category', 'default'),
-                subset_name=result_data.get('subset_name', 'main'),
-                num_samples=result_data.get('num_samples'),
+                benchmark=benchmark,
+                metric_name=metric_name,
+                metric_value=metric_value,
+                category=category,
+                subset_name=subset_name,
+                num_samples=num_samples,
                 raw_results=result_data
             )
             db.add(eval_result)

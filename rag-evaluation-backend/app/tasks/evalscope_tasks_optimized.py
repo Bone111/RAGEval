@@ -18,20 +18,10 @@ import logging
 try:
     from celery import Celery
     
-    # ==================== 环境变量验证 ====================
-    # 目的：确保Celery配置完整，避免使用默认值导致的隐藏问题
-    # 问题定位：如果这里抛出ValueError，说明环境变量未正确配置
-    # 解决方案：在启动脚本或.env文件中设置 CELERY_BROKER_URL 和 CELERY_RESULT_BACKEND
-    broker_url = os.getenv("CELERY_BROKER_URL")
-    backend_url = os.getenv("CELERY_RESULT_BACKEND")
-    
-    # 检查Broker URL（消息队列地址）
-    if not broker_url:
-        raise ValueError("环境变量 CELERY_BROKER_URL 未设置。请配置Redis连接URL，例如: redis://localhost:6379/0")
-    
-    # 检查Backend URL（结果存储地址）
-    if not backend_url:
-        raise ValueError("环境变量 CELERY_RESULT_BACKEND 未设置。请配置Redis连接URL，例如: redis://localhost:6379/0")
+    # ==================== Celery配置 ====================
+    # 使用默认配置，Worker进程启动时已设置环境变量
+    broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+    backend_url = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
     
     # 创建Celery应用实例（使用验证过的环境变量）
     celery_app = Celery(
@@ -390,20 +380,70 @@ class ResultParser:
         parsed_results = []
         
         try:
-            # EvalScope result结构可能不同，需要适配
-            # 这里假设result是一个包含评测指标的字典
-            if isinstance(result, dict):
-                # 尝试提取常见的结果结构
-                for metric_name, metric_value in result.items():
-                    if isinstance(metric_value, (int, float)):
-                        parsed_results.append({
-                            'benchmark': dataset_name,
-                            'metric_name': metric_name,
-                            'metric_value': float(metric_value),
-                            'category': 'default',
-                            'subset_name': 'main',
-                            'num_samples': None
-                        })
+            # EvalScope返回的结果结构: {dataset_name: Report对象}
+            if isinstance(result, dict) and dataset_name in result:
+                report = result[dataset_name]
+                
+                # 检查Report对象是否有metrics属性
+                if hasattr(report, 'metrics') and report.metrics:
+                    for metric in report.metrics:
+                        metric_name = getattr(metric, 'name', 'unknown')
+                        metric_score = getattr(metric, 'score', 0.0)
+                        metric_num = getattr(metric, 'num', 0)
+                        
+                        # 处理类别和子集
+                        if hasattr(metric, 'categories') and metric.categories:
+                            for category in metric.categories:
+                                category_name = getattr(category, 'name', ['default'])
+                                if isinstance(category_name, list):
+                                    category_name = category_name[0] if category_name else 'default'
+                                
+                                # 处理子集
+                                if hasattr(category, 'subsets') and category.subsets:
+                                    for subset in category.subsets:
+                                        subset_name = getattr(subset, 'name', 'main')
+                                        subset_score = getattr(subset, 'score', metric_score)
+                                        subset_num = getattr(subset, 'num', metric_num)
+                                        
+                                        parsed_results.append({
+                                            'benchmark': dataset_name,
+                                            'metric_name': metric_name,
+                                            'metric_value': float(subset_score),
+                                            'category': category_name,
+                                            'subset_name': subset_name,
+                                            'num_samples': subset_num
+                                        })
+                                else:
+                                    # 没有子集，使用类别级别的数据
+                                    parsed_results.append({
+                                        'benchmark': dataset_name,
+                                        'metric_name': metric_name,
+                                        'metric_value': float(metric_score),
+                                        'category': category_name,
+                                        'subset_name': 'main',
+                                        'num_samples': metric_num
+                                    })
+                        else:
+                            # 没有类别，使用指标级别的数据
+                            parsed_results.append({
+                                'benchmark': dataset_name,
+                                'metric_name': metric_name,
+                                'metric_value': float(metric_score),
+                                'category': 'default',
+                                'subset_name': 'main',
+                                'num_samples': metric_num
+                            })
+                
+                # 如果没有metrics属性，尝试从Report对象直接提取
+                elif hasattr(report, 'score'):
+                    parsed_results.append({
+                        'benchmark': dataset_name,
+                        'metric_name': 'overall_score',
+                        'metric_value': float(getattr(report, 'score', 0.0)),
+                        'category': 'default',
+                        'subset_name': 'main',
+                        'num_samples': getattr(report, 'num_samples', None)
+                    })
             
             # 如果无法解析，返回空列表
             if not parsed_results:
@@ -411,6 +451,8 @@ class ResultParser:
                 
         except Exception as e:
             logger.error(f"解析结果时出错: {e}")
+            import traceback
+            logger.error(f"详细错误: {traceback.format_exc()}")
         
         return parsed_results
     
@@ -504,6 +546,9 @@ class ResultParser:
 def run_real_evaluation_task(self, task_id: int):
     """执行真实的EvalScope评测任务 - 优化版本"""
     from app.models.evalscope_task import EvalScopeTask, EvalScopeResult
+    
+    # 确保ResultParser在函数开始时就被定义
+    # ResultParser类已在模块级别定义，无需global声明
     
     db = get_db_session()
     reporter = EnhancedProgressReporter(db, task_id)
@@ -625,112 +670,192 @@ def run_real_evaluation_task(self, task_id: int):
         reporter.set_phase('loading_model')
         reporter.update_progress(10, "准备评测环境")
         
-        # 6. 使用Python API执行评测
+        # 6. 根据评测后端选择执行方式
         reporter.log("INFO", "")
         reporter.log("INFO", "=" * 80)
-        reporter.log("INFO", "🚀 使用 EvalScope Python API 进行评测")
-        reporter.log("INFO", "=" * 80)
         
-        try:
-            from evalscope.run import run_task
-            from evalscope.config import TaskConfig
+        if task.eval_backend == 'RAGEval':
+            reporter.log("INFO", "🚀 使用 RAGEval 评测后端进行RAG评测")
+            reporter.log("INFO", "=" * 80)
             
-            reporter.set_phase('evaluating')
-            reporter.update_progress(15, "开始评测")
-            
-            # 为每个数据集单独评测
-            all_results = []
-            
-            for idx, dataset_name in enumerate(task.datasets):
-                # 检查任务是否被取消
-                if getattr(self.request, 'cancelled', False):
-                    reporter.log("WARNING", f"⚠️ 任务已被取消，停止执行")
-                    return {"status": "cancelled", "message": "任务已被取消"}
+            # 使用RAGEval后端进行RAG评测
+            try:
+                from app.services.rageval_evaluator import RAGEvalEvaluator
                 
-                reporter.log("INFO", f"")
-                reporter.log("INFO", f"▶️  [{idx+1}/{len(task.datasets)}] 评测数据集: {dataset_name}")
-                reporter.update_dataset_progress(dataset_name, status='running', current_step='准备')
+                reporter.set_phase('evaluating')
+                reporter.update_progress(15, "开始RAG评测")
                 
-                # 确定数据集工作目录
-                dataset_work_dir = work_dir / dataset_name if len(task.datasets) > 1 else work_dir
-                
-                # 如果是恢复的任务，查找缓存目录
-                cache_dir = None
-                if is_resumed:
-                    if dataset_work_dir.exists():
-                        timestamp_dirs = [d for d in dataset_work_dir.iterdir() if d.is_dir() and d.name.startswith('2025')]
-                        if timestamp_dirs:
-                            cache_dir = max(timestamp_dirs, key=lambda x: x.name)
-                
-                # 构建TaskConfig参数
-                config_params = EvalScopeAPIAdapter.build_task_config_params(
-                    model_name=model_name,
-                    datasets=[dataset_name],
-                    eval_type=eval_type,
-                    work_dir=str(dataset_work_dir),
-                    api_config=api_config,
-                    model_args=task.model_args,
-                    generation_config=task.generation_config,
-                    dataset_args=task.dataset_args,
-                    limit=task.dataset_args.get(dataset_name, {}).get('limit') if task.dataset_args else None,
-                    use_cache=str(cache_dir) if is_resumed and cache_dir else None  # 恢复时使用缓存
+                # 创建RAGEval评测器
+                rageval_evaluator = RAGEvalEvaluator(
+                    db=db,
+                    task=task,
+                    work_dir=work_dir,
+                    reporter=reporter,
+                    process_manager=process_manager
                 )
                 
-                # 如果是恢复的任务，记录日志
-                if is_resumed:
-                    if cache_dir:
-                        reporter.log("INFO", f"🔄 [{dataset_name}] 优化版任务使用缓存继续执行: {cache_dir}")
-                    else:
-                        reporter.log("WARNING", f"⚠️ [{dataset_name}] 未找到缓存目录，将重新开始")
+                # 执行RAG评测
+                all_results = rageval_evaluator.evaluate()
                 
-                # 输出配置（隐藏敏感信息）
-                config_debug = {k: ('***' if k == 'api_key' else v) for k, v in config_params.items()}
-                reporter.log("INFO", f"📋 配置参数:")
-                for key, value in config_debug.items():
-                    reporter.log("INFO", f"   • {key}: {value}")
+            except Exception as e:
+                logger.error(f"RAGEval评测失败: {e}")
+                reporter.log("ERROR", f"❌ RAGEval评测失败: {e}")
+                raise
                 
-                # 创建TaskConfig并执行
-                eval_config = TaskConfig(**config_params)
-                reporter.log("INFO", f"🚀 开始评测...")
-                
-                # 执行评测前再次检查取消状态
-                if getattr(self.request, 'cancelled', False):
-                    reporter.log("WARNING", f"⚠️ 任务已被取消，跳过数据集 {dataset_name}")
-                    continue
-                
-                # 执行评测前保存进程信息（模拟进程启动）
-                import os
-                current_pid = os.getpid()
-                cmd_args = ["python", "-m", "evalscope.cli.cli", "eval", dataset_name]
-                process_manager.save_process_info(dataset_name, current_pid, cmd_args)
-                reporter.log("INFO", f"💾 已保存进程信息: {dataset_name} -> PID {current_pid}")
-                
-                # 执行评测
-                result = run_task(eval_config)
-                
-                # 评测完成后检查取消状态
-                if getattr(self.request, 'cancelled', False):
-                    reporter.log("WARNING", f"⚠️ 任务已被取消，停止处理结果")
-                    return {"status": "cancelled", "message": "任务已被取消"}
-                
-                # 解析结果
-                parsed_results = ResultParser.parse_evalscope_result(result, dataset_name)
-                all_results.extend(parsed_results)
-                
-                # 更新数据集完成状态
-                reporter.update_dataset_progress(dataset_name, status='completed')
-                reporter.log("INFO", f"✅ 数据集 {dataset_name} 评测完成")
-                
-                # 更新整体进度
-                reporter.update_progress(message=f"完成数据集 {dataset_name}")
+        else:
+            reporter.log("INFO", "🚀 使用 EvalScope Python API 进行评测")
+            reporter.log("INFO", "=" * 80)
             
-            reporter.log("INFO", "")
-            reporter.log("INFO", "🎉 所有数据集评测完成")
-            
-        except Exception as e:
-            error_msg = EvalScopeAPIAdapter.format_error_message(e, "EvalScope评测")
-            reporter.log("ERROR", f"❌ 评测失败: {error_msg}")
-            raise Exception(f"EvalScope评测失败: {error_msg}")
+            try:
+                from evalscope.run import run_task
+                from evalscope.config import TaskConfig
+                
+                reporter.set_phase('evaluating')
+                reporter.update_progress(15, "开始评测")
+                
+                # 为每个数据集单独评测
+                all_results = []
+                
+                for idx, dataset_name in enumerate(task.datasets):
+                    # 检查任务是否被取消
+                    if getattr(self.request, 'cancelled', False):
+                        reporter.log("WARNING", f"⚠️ 任务已被取消，停止执行")
+                        return {"status": "cancelled", "message": "任务已被取消"}
+                    
+                    reporter.log("INFO", f"")
+                    reporter.log("INFO", f"▶️  [{idx+1}/{len(task.datasets)}] 评测数据集: {dataset_name}")
+                    reporter.update_dataset_progress(dataset_name, status='running', current_step='准备')
+                    
+                    # 确定数据集工作目录
+                    dataset_work_dir = work_dir / dataset_name if len(task.datasets) > 1 else work_dir
+                    
+                    # 如果是恢复的任务，查找缓存目录
+                    cache_dir = None
+                    if is_resumed:
+                        if dataset_work_dir.exists():
+                            timestamp_dirs = [d for d in dataset_work_dir.iterdir() if d.is_dir() and d.name.startswith('2025')]
+                            if timestamp_dirs:
+                                cache_dir = max(timestamp_dirs, key=lambda x: x.name)
+                    
+                    # 构建TaskConfig参数
+                    config_params = EvalScopeAPIAdapter.build_task_config_params(
+                        model_name=model_name,
+                        datasets=[dataset_name],
+                        eval_type=eval_type,
+                        work_dir=str(dataset_work_dir),
+                        api_config=api_config,
+                        model_args=task.model_args,
+                        generation_config=task.generation_config,
+                        dataset_args=task.dataset_args,
+                        limit=task.dataset_args.get(dataset_name, {}).get('limit') if task.dataset_args else None,
+                        use_cache=str(cache_dir) if is_resumed and cache_dir else None  # 恢复时使用缓存
+                    )
+                    
+                    # 如果是恢复的任务，记录日志
+                    if is_resumed:
+                        if cache_dir:
+                            reporter.log("INFO", f"🔄 [{dataset_name}] 优化版任务使用缓存继续执行: {cache_dir}")
+                        else:
+                            reporter.log("WARNING", f"⚠️ [{dataset_name}] 未找到缓存目录，将重新开始")
+                    
+                    # 输出配置（隐藏敏感信息）
+                    config_debug = {k: ('***' if k == 'api_key' else v) for k, v in config_params.items()}
+                    reporter.log("INFO", f"📋 配置参数:")
+                    for key, value in config_debug.items():
+                        reporter.log("INFO", f"   • {key}: {value}")
+                    
+                    # 创建TaskConfig并执行
+                    eval_config = TaskConfig(**config_params)
+                    reporter.log("INFO", f"🚀 开始评测...")
+                    
+                    # 执行评测前再次检查取消状态
+                    if getattr(self.request, 'cancelled', False):
+                        reporter.log("WARNING", f"⚠️ 任务已被取消，跳过数据集 {dataset_name}")
+                        continue
+                    
+                    # 执行评测前保存进程信息（模拟进程启动）
+                    import os
+                    current_pid = os.getpid()
+                    cmd_args = ["python", "-m", "evalscope.cli.cli", "eval", dataset_name]
+                    process_manager.save_process_info(dataset_name, current_pid, cmd_args)
+                    reporter.log("INFO", f"💾 已保存进程信息: {dataset_name} -> PID {current_pid}")
+                    
+                    # 执行评测（添加超时和错误处理）
+                    try:
+                        import signal
+                        import threading
+                        
+                        # 设置超时机制
+                        timeout_seconds = 3600  # 1小时超时
+                        result = None
+                        exception = None
+                        
+                        def run_eval():
+                            nonlocal result, exception
+                            try:
+                                result = run_task(eval_config)
+                            except Exception as e:
+                                exception = e
+                        
+                        # 在单独线程中执行评测
+                        eval_thread = threading.Thread(target=run_eval)
+                        eval_thread.daemon = True
+                        eval_thread.start()
+                        eval_thread.join(timeout=timeout_seconds)
+                        
+                        if eval_thread.is_alive():
+                            reporter.log("ERROR", f"❌ 评测超时（{timeout_seconds}秒），任务将被标记为失败")
+                            raise TimeoutError(f"评测超时，超过{timeout_seconds}秒")
+                        
+                        if exception:
+                            raise exception
+                            
+                        if result is None:
+                            raise RuntimeError("评测执行失败，未返回结果")
+                            
+                    except Exception as e:
+                        reporter.log("ERROR", f"❌ 评测执行失败: {e}")
+                        # 尝试从工作目录加载已生成的结果
+                        if work_dir.exists():
+                            timestamp_dirs = [d for d in work_dir.iterdir() if d.is_dir() and d.name.startswith('2025')]
+                            if timestamp_dirs:
+                                latest_dir = max(timestamp_dirs, key=lambda x: x.name)
+                                reporter.log("INFO", f"🔄 尝试从工作目录加载结果: {latest_dir}")
+                                try:
+                                    # 使用本地定义的ResultParser类
+                                    from app.tasks.evalscope_tasks_optimized import ResultParser
+                                    all_results = ResultParser.load_results_from_json_files(work_dir)
+                                    if all_results:
+                                        reporter.log("INFO", f"✅ 成功加载 {len(all_results)} 个结果")
+                                        break  # 跳出数据集循环，继续处理结果
+                                except Exception as load_error:
+                                    reporter.log("WARNING", f"⚠️ 加载结果失败: {load_error}")
+                        raise
+                    
+                    # 评测完成后检查取消状态
+                    if getattr(self.request, 'cancelled', False):
+                        reporter.log("WARNING", f"⚠️ 任务已被取消，停止处理结果")
+                        return {"status": "cancelled", "message": "任务已被取消"}
+                    
+                    # 解析结果
+                    from app.tasks.evalscope_tasks_optimized import ResultParser
+                    parsed_results = ResultParser.parse_evalscope_result(result, dataset_name)
+                    all_results.extend(parsed_results)
+                    
+                    # 更新数据集完成状态
+                    reporter.update_dataset_progress(dataset_name, status='completed')
+                    reporter.log("INFO", f"✅ 数据集 {dataset_name} 评测完成")
+                    
+                    # 更新整体进度
+                    reporter.update_progress(message=f"完成数据集 {dataset_name}")
+                
+                reporter.log("INFO", "")
+                reporter.log("INFO", "🎉 所有数据集评测完成")
+                
+            except Exception as e:
+                error_msg = EvalScopeAPIAdapter.format_error_message(e, "EvalScope评测")
+                reporter.log("ERROR", f"❌ 评测失败: {error_msg}")
+                raise Exception(f"EvalScope评测失败: {error_msg}")
         
         # 7. 处理结果
         reporter.set_phase('processing_results')
@@ -739,6 +864,7 @@ def run_real_evaluation_task(self, task_id: int):
         # 如果Python API没有返回可用结果，尝试从JSON文件加载
         if not all_results:
             reporter.log("WARNING", "Python API未返回结果，尝试从JSON文件加载")
+            from app.tasks.evalscope_tasks_optimized import ResultParser
             all_results = ResultParser.load_results_from_json_files(work_dir)
         
         # 保存结果到数据库
@@ -776,7 +902,32 @@ def run_real_evaluation_task(self, task_id: int):
         task.status = 'completed'
         task.progress = 100
         task.completed_at = datetime.now()
-        db.commit()
+        
+        # 确保数据库更新成功
+        try:
+            db.commit()
+            reporter.log("INFO", "✅ 任务状态已保存到数据库")
+        except Exception as commit_error:
+            reporter.log("ERROR", f"❌ 保存任务状态失败: {commit_error}")
+            db.rollback()
+            # 尝试使用原生SQL更新
+            try:
+                from sqlalchemy import text
+                db.execute(text('''
+                    UPDATE evalscope_tasks 
+                    SET status = 'completed', 
+                        progress = 100, 
+                        completed_at = :completed_at
+                    WHERE id = :task_id
+                '''), {
+                    'completed_at': datetime.now(),
+                    'task_id': task_id
+                })
+                db.commit()
+                reporter.log("INFO", "✅ 使用原生SQL成功更新任务状态")
+            except Exception as sql_error:
+                reporter.log("ERROR", f"❌ 原生SQL更新也失败: {sql_error}")
+                db.rollback()
         
         # 停止进度监控
         reporter.stop_progress_monitoring()

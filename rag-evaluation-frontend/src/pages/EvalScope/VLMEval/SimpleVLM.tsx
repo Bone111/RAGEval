@@ -17,7 +17,8 @@ import {
 import {
   ArrowLeftOutlined,
   PictureOutlined,
-  PlayCircleOutlined
+  PlayCircleOutlined,
+  ReloadOutlined
 } from '@ant-design/icons';
 
 const { Title, Text } = Typography;
@@ -45,6 +46,45 @@ const SimpleVLMPage: React.FC = () => {
     'ChartQA_TEST',
     'AI2D_TEST'
   ];
+
+  // 自动生成VLM任务名称
+  const generateVLMTaskName = () => {
+    const modelId = form.getFieldValue('model_id');
+    const selectedDatasets = form.getFieldValue('datasets') || [];
+    
+    // 获取当前时间
+    const now = new Date();
+    const timestamp = now.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).replace(/[\/\s:]/g, '');
+    
+    // 构建任务名称
+    let taskName = '';
+    if (modelId) {
+      taskName = `VLM_${modelId}`;
+    } else {
+      taskName = 'VLM评测任务';
+    }
+    
+    // 添加数据集信息
+    if (selectedDatasets.length > 0) {
+      if (selectedDatasets.length <= 3) {
+        taskName += `_${selectedDatasets.join('+')}`;
+      } else {
+        taskName += `_${selectedDatasets.length}个数据集`;
+      }
+    }
+    
+    // 添加时间戳
+    taskName += `_${timestamp}`;
+    
+    // 设置表单值
+    form.setFieldsValue({ task_name: taskName });
+    message.success('✅ VLM任务名称已自动生成');
+  };
 
   const handleSubmit = async (values: any) => {
     try {
@@ -95,7 +135,20 @@ const SimpleVLMPage: React.FC = () => {
                 label="任务名称"
                 rules={[{ required: true, message: '请输入任务名称' }]}
               >
-                <Input placeholder="输入VLM评测任务名称" />
+                <Input.Group compact>
+                  <Input 
+                    style={{ width: 'calc(100% - 100px)' }}
+                    placeholder="输入VLM评测任务名称" 
+                  />
+                  <Button 
+                    type="default" 
+                    style={{ width: '100px' }}
+                    onClick={generateVLMTaskName}
+                    icon={<ReloadOutlined />}
+                  >
+                    自动生成
+                  </Button>
+                </Input.Group>
               </Form.Item>
 
               <Form.Item

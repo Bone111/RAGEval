@@ -64,6 +64,84 @@ const TaskCreatePage: React.FC = () => {
   });
   const navigate = useNavigate();
   const configManager = ConfigManager.getInstance();
+  
+  // 任务名称序号计数器
+  const [taskNameCounter, setTaskNameCounter] = useState(1);
+
+  // 获取模型显示名称
+  const getModelDisplayName = (modelId: string) => {
+    if (!modelId) return '';
+    
+    // 如果是 user_config_ 开头的，查找实际模型名称
+    if (modelId.startsWith('user_config_')) {
+      const configId = modelId.replace('user_config_', '');
+      
+      // 先从 userModels 查找
+      let userModel = userModels.find(m => m.id === configId);
+      
+      // 如果没找到，从 unifiedModels 查找
+      if (!userModel) {
+        const unifiedModel = unifiedModels.find(m => m.id === modelId);
+        if (unifiedModel) {
+          return unifiedModel.name || unifiedModel.display_name || modelId;
+        }
+      } else {
+        return userModel.modelName || userModel.name || modelId;
+      }
+    }
+    
+    // 如果是 config: 开头的
+    if (modelId.startsWith('config:')) {
+      const configId = modelId.replace('config:', '');
+      const userModel = userModels.find(m => m.id === configId);
+      if (userModel) {
+        return userModel.modelName || userModel.name || modelId;
+      }
+    }
+    
+    // 预设模型，直接返回模型ID（去掉命名空间）
+    if (modelId.includes('/')) {
+      return modelId.split('/').pop() || modelId;
+    }
+    
+    return modelId;
+  };
+
+  // 自动生成任务名称
+  const autoGenerateTaskName = () => {
+    const modelId = form.getFieldValue('model_id');
+    const evalBackend = form.getFieldValue('eval_backend') || 'Native';
+    
+    // 获取模型显示名称
+    const modelName = getModelDisplayName(modelId);
+    
+    // 构建任务名称
+    let taskName = '';
+    if (modelName) {
+      taskName = `${modelName}`;
+    } else {
+      taskName = '评测任务';
+    }
+    
+    // 添加数据集信息（使用状态中的selectedBenchmarks）
+    if (selectedBenchmarks.length > 0) {
+      if (selectedBenchmarks.length <= 3) {
+        taskName += `_${selectedBenchmarks.join('+')}`;
+      } else {
+        taskName += `_${selectedBenchmarks.length}个数据集`;
+      }
+    }
+    
+    // 添加序号后缀
+    taskName += `_${taskNameCounter}`;
+    
+    // 递增计数器
+    setTaskNameCounter(prev => prev + 1);
+    
+    // 设置表单值和状态
+    form.setFieldsValue({ task_name: taskName });
+    setFormData(prev => ({ ...prev, task_name: taskName }));
+  };
 
   // 模型ID格式验证函数
   const validateModelId = (modelId: string, evalType: string): { isValid: boolean; message?: string } => {
@@ -107,6 +185,14 @@ const TaskCreatePage: React.FC = () => {
   useEffect(() => {
     updateTimeEstimate();
   }, [selectedBenchmarks, formData.limit, formData.model_id]);
+
+  // 监听模型和数据集变化，自动生成任务名称
+  useEffect(() => {
+    const modelId = form.getFieldValue('model_id');
+    if (modelId && selectedBenchmarks.length > 0) {
+      autoGenerateTaskName();
+    }
+  }, [selectedBenchmarks, formData.model_id]);
 
   const loadBenchmarks = async () => {
     try {
@@ -914,7 +1000,9 @@ const TaskCreatePage: React.FC = () => {
             label="任务名称"
             rules={[{ required: true, message: '请输入任务名称' }]}
           >
-            <Input placeholder="例如: Qwen2.5-7B综合评测" />
+            <Input 
+              placeholder="任务名称将根据模型和数据集自动生成，可手动修改" 
+            />
           </Form.Item>
 
           <Form.Item
@@ -974,7 +1062,7 @@ const TaskCreatePage: React.FC = () => {
                 <strong>任务名称:</strong> {form.getFieldValue('task_name') || '未设置'}
               </div>
               <div>
-                <strong>模型:</strong> {form.getFieldValue('model_id') || '未选择'}
+                <strong>模型:</strong> {getModelDisplayName(form.getFieldValue('model_id')) || '未选择'}
               </div>
               <div>
                 <strong>数据集:</strong> {selectedBenchmarks.length > 0 

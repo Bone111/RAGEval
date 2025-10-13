@@ -75,6 +75,8 @@ function stop_services() {
   pkill -f "celery.*evalscope_tasks_optimized.*worker" || true
   sleep 2
   
+  # 清理临时文件（已无需清理start_celery_worker.sh）
+  
   print_success "所有服务已停止"
 }
 
@@ -103,6 +105,17 @@ function check_status() {
   # 检查Celery worker
   if ps aux | grep -E "celery.*evalscope_tasks_optimized.*worker" | grep -v grep > /dev/null; then
     print_success "Celery worker: 运行中"
+    
+    # 检查Worker进程环境变量
+    print_info "检查Worker进程环境变量..."
+    if [ -f "rag-evaluation-backend/celery_worker.log" ]; then
+      if grep -q "CELERY_BROKER_URL=redis://localhost:6379/0" rag-evaluation-backend/celery_worker.log; then
+        print_success "✅ Worker环境变量: 正确设置"
+      else
+        print_warning "⚠️ Worker环境变量: 可能未正确设置"
+        print_info "建议重启服务: $0 stop && $0 start"
+      fi
+    fi
   else
     print_warning "Celery worker: 未运行"
   fi
@@ -192,22 +205,43 @@ function start_celery() {
     return 1
   fi
   
-  # 设置环境变量
+  # 设置环境变量（确保Worker进程能继承）
   export CELERY_BROKER_URL=redis://localhost:6379/0
   export CELERY_RESULT_BACKEND=redis://localhost:6379/0
   
+  # 验证环境变量设置
+  print_info "环境变量设置:"
+  print_info "CELERY_BROKER_URL=$CELERY_BROKER_URL"
+  print_info "CELERY_RESULT_BACKEND=$CELERY_RESULT_BACKEND"
+  
+  # 直接启动Celery worker，无需创建临时脚本
   print_info "启动命令: celery -A app.tasks.evalscope_tasks_optimized worker --loglevel=info --concurrency=2"
-  celery -A app.tasks.evalscope_tasks_optimized worker --loglevel=info --concurrency=2 &
+  celery -A app.tasks.evalscope_tasks_optimized worker --loglevel=info --concurrency=2 > celery_worker.log 2>&1 &
   CELERY_PID=$!
   cd ..
   
   # 等待Celery启动
   sleep 5
+  
+  # 检查Worker进程是否运行
   if ps aux | grep -E "celery.*evalscope_tasks_optimized.*worker" | grep -v grep > /dev/null; then
     print_success "Celery worker启动成功！PID: $CELERY_PID"
+    
+    # 验证Worker进程环境变量
+    print_info "验证Worker进程环境变量..."
+    sleep 2
+    if [ -f "rag-evaluation-backend/celery_worker.log" ]; then
+      if grep -q "CELERY_BROKER_URL=redis://localhost:6379/0" rag-evaluation-backend/celery_worker.log; then
+        print_success "✅ Worker进程环境变量设置正确"
+      else
+        print_warning "⚠️ Worker进程环境变量可能未正确设置"
+      fi
+    fi
+    
     return 0
   else
     print_error "Celery worker启动失败！"
+    print_info "查看日志: tail -f rag-evaluation-backend/celery_worker.log"
     return 1
   fi
 }

@@ -18,32 +18,10 @@ from app.core.process_manager import ProcessManager
 try:
     from celery import Celery
     
-    # ==================== 环境变量验证 ====================
-    # 目的：确保Celery配置完整，避免使用默认值导致的隐藏问题
-    # 问题定位：如果这里抛出ValueError，说明环境变量未正确配置
-    # 解决方案：在启动脚本或.env文件中设置 CELERY_BROKER_URL 和 CELERY_RESULT_BACKEND
-    
-    # 尝试从配置文件加载环境变量
-    config_file = "performance_config_optimized.env"
-    if os.path.exists(config_file):
-        with open(config_file, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    if key.startswith('CELERY_'):
-                        os.environ[key] = value
-    
-    broker_url = os.getenv("CELERY_BROKER_URL")
-    backend_url = os.getenv("CELERY_RESULT_BACKEND")
-    
-    # 检查Broker URL（消息队列地址）
-    if not broker_url:
-        raise ValueError("环境变量 CELERY_BROKER_URL 未设置。请配置Redis连接URL，例如: redis://localhost:6379/0")
-    
-    # 检查Backend URL（结果存储地址）
-    if not backend_url:
-        raise ValueError("环境变量 CELERY_RESULT_BACKEND 未设置。请配置Redis连接URL，例如: redis://localhost:6379/0")
+    # ==================== Celery配置 ====================
+    # 使用默认配置，Worker进程启动时已设置环境变量
+    broker_url = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
+    backend_url = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
     
     # 创建Celery应用实例（使用验证过的环境变量）
     celery_app = Celery(
