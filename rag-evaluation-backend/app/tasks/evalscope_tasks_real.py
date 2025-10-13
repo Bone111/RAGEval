@@ -845,12 +845,10 @@ def run_real_evaluation_task(self, task_id: int):
         
         # 决定是否使用Python API
         use_python_api = settings.EVALSCOPE_PREFER_PYTHON_API
-        if total_task_samples > 0 and total_task_samples < settings.EVALSCOPE_SMALL_TASK_THRESHOLD:
-            # 小任务：直接使用命令行（更快）
-            use_python_api = False
-            reporter.log("INFO", f"🚀 小任务检测（{total_task_samples}样本），使用快速执行路径（命令行模式）")
-        elif not settings.EVALSCOPE_PREFER_PYTHON_API:
+        if not settings.EVALSCOPE_PREFER_PYTHON_API:
             reporter.log("INFO", f"🚀 配置为命令行优先模式（EVALSCOPE_PREFER_PYTHON_API=false）")
+        else:
+            reporter.log("INFO", f"🚀 配置为Python API优先模式（EVALSCOPE_PREFER_PYTHON_API=true）")
         
         # 优先使用Python API方式（更可靠，直接传递配置）
         if use_python_api:
@@ -884,8 +882,15 @@ def run_real_evaluation_task(self, task_id: int):
                     reporter.update_dataset_progress(dataset_name, 0, 'running', '开始评测')
                     reporter.log("INFO", f"开始评测数据集: {dataset_name}")
                 
-                    # 确定数据集工作目录
-                    dataset_work_dir = work_dir / f'dataset_{dataset_name}' if len(task.datasets) > 1 else work_dir
+                    # 确定数据集工作目录 - 修复并行执行逻辑
+                    if len(task.datasets) > 1:
+                        # 多数据集并行：为每个数据集创建独立目录
+                        dataset_work_dir = work_dir / dataset_name
+                        dataset_work_dir.mkdir(parents=True, exist_ok=True)
+                        reporter.log("INFO", f"🔧 [{dataset_name}] 创建独立工作目录: {dataset_work_dir}")
+                    else:
+                        # 单数据集：使用主工作目录
+                        dataset_work_dir = work_dir
                     
                     config_params = {
                         'model': model_id,
@@ -953,8 +958,11 @@ def run_real_evaluation_task(self, task_id: int):
                     reporter.log("INFO", f"✅ [{dataset_name}] TaskConfig创建成功")
                     reporter.log("INFO", f"🚀 [{dataset_name}] 开始评测...")
                 
-                    # 获取数据集工作目录
-                    dataset_work_dir = work_dir / f'dataset_{dataset_name}' if len(task.datasets) > 1 else work_dir
+                    # 获取数据集工作目录 - 确保与上面一致
+                    if len(task.datasets) > 1:
+                        dataset_work_dir = work_dir / dataset_name
+                    else:
+                        dataset_work_dir = work_dir
                 
                     # 启动进度监控线程
                     import threading
@@ -976,6 +984,12 @@ def run_real_evaluation_task(self, task_id: int):
                     
                         while not stop_monitor.is_set():
                             try:
+                                # 检查任务是否被取消
+                                if check_is_aborted():
+                                    reporter.log("WARNING", f"[{dataset_name}] 任务已被取消，停止进度监控")
+                                    stop_monitor.set()
+                                    break
+                                
                                 # 统计已完成的样本数
                                 completed = count_completed_samples(dataset_work_dir)
                             
@@ -1011,6 +1025,10 @@ def run_real_evaluation_task(self, task_id: int):
                     reporter.log("INFO", f"✅ [{dataset_name}] 进度监控线程已启动")
                 
                     try:
+                        # 执行评测前检查是否被取消
+                        if check_is_aborted():
+                            raise Exception(f"任务被取消，数据集 {dataset_name} 评测已终止")
+                        
                         # 执行评测
                         result = run_task(eval_config)
                         reporter.log("INFO", f"✅ [{dataset_name}] 评测完成")
@@ -1028,7 +1046,7 @@ def run_real_evaluation_task(self, task_id: int):
                     import concurrent.futures
                 
                     results = []
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(task.datasets), 3)) as executor:
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=len(task.datasets)) as executor:
                         future_to_dataset = {
                             executor.submit(run_single_dataset, dataset): dataset 
                             for dataset in task.datasets
@@ -1074,8 +1092,15 @@ def run_real_evaluation_task(self, task_id: int):
         if not python_api_success:
             # 为所有数据集命令添加工作目录参数和API参数
             for i, (dataset_name, cmd_args) in enumerate(dataset_commands):
-                # 为每个数据集使用独立的工作目录
-                dataset_work_dir = work_dir / f'dataset_{dataset_name}' if len(task.datasets) > 1 else work_dir
+                # 为每个数据集使用独立的工作目录 - 修复并行执行逻辑
+                if len(task.datasets) > 1:
+                    # 多数据集并行：为每个数据集创建独立目录
+                    dataset_work_dir = work_dir / dataset_name
+                    dataset_work_dir.mkdir(parents=True, exist_ok=True)
+                    reporter.log("INFO", f"🔧 [{dataset_name}] 创建独立工作目录: {dataset_work_dir}")
+                else:
+                    # 单数据集：使用主工作目录
+                    dataset_work_dir = work_dir
                 cmd_args.extend(['--work-dir', str(dataset_work_dir)])
                 
                 # 如果是恢复的任务，添加use-cache参数以继续执行
@@ -1184,6 +1209,16 @@ def run_real_evaluation_task(self, task_id: int):
                 stderr_lines = []
                 
                 while True:
+                    # 检查任务是否被取消
+                    if check_is_aborted():
+                        reporter.log("WARNING", f"[{dataset_name}] 任务已被取消，终止评测进程")
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                        raise Exception(f"任务被取消，数据集 {dataset_name} 评测已终止")
+                    
                     if process.poll() is not None:
                         remaining_stdout = process.stdout.read()
                         remaining_stderr = process.stderr.read()
@@ -1226,7 +1261,7 @@ def run_real_evaluation_task(self, task_id: int):
             stdout_lines = []
             stderr_lines = []
             
-            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(dataset_commands), 3)) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=len(dataset_commands)) as executor:
                 # 提交所有任务
                 future_to_dataset = {
                     executor.submit(run_dataset_command, dataset_name, cmd_args): dataset_name 
@@ -1280,6 +1315,16 @@ def run_real_evaluation_task(self, task_id: int):
             stderr_lines = []
             
             while True:
+                # 检查任务是否被取消
+                if check_is_aborted():
+                    reporter.log("WARNING", "任务已被取消，终止评测进程")
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                    raise Exception("任务被取消，评测已终止")
+                
                 if process.poll() is not None:
                     remaining_stdout = process.stdout.read()
                     remaining_stderr = process.stderr.read()

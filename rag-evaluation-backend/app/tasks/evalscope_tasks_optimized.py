@@ -703,7 +703,9 @@ def run_real_evaluation_task(self, task_id: int):
                 raise
                 
         else:
-            reporter.log("INFO", "🚀 使用 EvalScope Python API 进行评测")
+            # Native 和 EvalScope 后端都使用 EvalScope Python API
+            backend_name = "Native" if task.eval_backend == 'Native' else "EvalScope"
+            reporter.log("INFO", f"🚀 使用 {backend_name} 评测后端进行评测")
             reporter.log("INFO", "=" * 80)
             
             try:
@@ -713,17 +715,18 @@ def run_real_evaluation_task(self, task_id: int):
                 reporter.set_phase('evaluating')
                 reporter.update_progress(15, "开始评测")
                 
-                # 为每个数据集单独评测
+                # 为每个数据集单独评测 - 支持并行处理
                 all_results = []
                 
-                for idx, dataset_name in enumerate(task.datasets):
+                def run_single_dataset(dataset_name):
+                    """运行单个数据集的评测"""
                     # 检查任务是否被取消
                     if getattr(self.request, 'cancelled', False):
                         reporter.log("WARNING", f"⚠️ 任务已被取消，停止执行")
                         return {"status": "cancelled", "message": "任务已被取消"}
                     
                     reporter.log("INFO", f"")
-                    reporter.log("INFO", f"▶️  [{idx+1}/{len(task.datasets)}] 评测数据集: {dataset_name}")
+                    reporter.log("INFO", f"▶️  评测数据集: {dataset_name}")
                     reporter.update_dataset_progress(dataset_name, status='running', current_step='准备')
                     
                     # 确定数据集工作目录
@@ -771,7 +774,7 @@ def run_real_evaluation_task(self, task_id: int):
                     # 执行评测前再次检查取消状态
                     if getattr(self.request, 'cancelled', False):
                         reporter.log("WARNING", f"⚠️ 任务已被取消，跳过数据集 {dataset_name}")
-                        continue
+                        return {"status": "cancelled", "message": f"任务被取消，跳过数据集 {dataset_name}"}
                     
                     # 执行评测前保存进程信息（模拟进程启动）
                     import os
@@ -827,7 +830,7 @@ def run_real_evaluation_task(self, task_id: int):
                                     all_results = ResultParser.load_results_from_json_files(work_dir)
                                     if all_results:
                                         reporter.log("INFO", f"✅ 成功加载 {len(all_results)} 个结果")
-                                        break  # 跳出数据集循环，继续处理结果
+                                        return {"status": "loaded", "results": all_results}
                                 except Exception as load_error:
                                     reporter.log("WARNING", f"⚠️ 加载结果失败: {load_error}")
                         raise
@@ -840,7 +843,6 @@ def run_real_evaluation_task(self, task_id: int):
                     # 解析结果
                     from app.tasks.evalscope_tasks_optimized import ResultParser
                     parsed_results = ResultParser.parse_evalscope_result(result, dataset_name)
-                    all_results.extend(parsed_results)
                     
                     # 更新数据集完成状态
                     reporter.update_dataset_progress(dataset_name, status='completed')
@@ -848,6 +850,56 @@ def run_real_evaluation_task(self, task_id: int):
                     
                     # 更新整体进度
                     reporter.update_progress(message=f"完成数据集 {dataset_name}")
+                    
+                    return dataset_name, parsed_results
+                
+                # 并行处理多个数据集
+                if len(task.datasets) > 1:
+                    reporter.log("INFO", f"🚀 使用Python API并行处理 {len(task.datasets)} 个数据集")
+                    import concurrent.futures
+                
+                    results = []
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=len(task.datasets)) as executor:
+                        future_to_dataset = {
+                            executor.submit(run_single_dataset, dataset): dataset 
+                            for dataset in task.datasets
+                        }
+                    
+                        for future in concurrent.futures.as_completed(future_to_dataset):
+                            result = future.result()
+                            
+                            # 处理不同的返回类型
+                            if isinstance(result, dict) and result.get('status') == 'cancelled':
+                                reporter.log("WARNING", f"⚠️ 数据集评测被取消")
+                                continue
+                            elif isinstance(result, dict) and result.get('status') == 'loaded':
+                                # 从文件加载的结果
+                                loaded_results = result.get('results', [])
+                                results.extend(loaded_results)
+                                continue
+                            elif isinstance(result, tuple) and len(result) == 2:
+                                # 正常评测结果
+                                dataset_name, parsed_results = result
+                                results.extend(parsed_results)
+                                
+                                # 更新数据集完成状态
+                                reporter.update_dataset_progress(dataset_name, status='completed')
+                                reporter.log("INFO", f"✅ 数据集 {dataset_name} 评测完成")
+                                
+                                progress = len(results) * 80 / len(task.datasets) + 15
+                                reporter.update_progress(int(progress), f"完成数据集 {dataset_name}")
+                            else:
+                                reporter.log("WARNING", f"⚠️ 未知的返回结果类型: {type(result)}")
+                    
+                    all_results = results
+                else:
+                    # 单个数据集
+                    dataset_name, parsed_results = run_single_dataset(task.datasets[0])
+                    all_results = parsed_results
+                
+                    # 更新数据集完成状态
+                    reporter.update_dataset_progress(dataset_name, status='completed')
+                    reporter.log("INFO", f"✅ 数据集 {dataset_name} 评测完成")
                 
                 reporter.log("INFO", "")
                 reporter.log("INFO", "🎉 所有数据集评测完成")

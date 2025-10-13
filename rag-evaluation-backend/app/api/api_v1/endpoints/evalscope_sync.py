@@ -266,9 +266,48 @@ def run_eval_in_background(task_id: int, task_data: schemas.TaskCreate):
             
             print(f"TaskConfig 参数: {config_params}")
             
-            # 创建 TaskConfig 并执行评测
-            task_config = TaskConfig(**config_params)
-            results = run_task(task_config)
+            # 支持多数据集并行处理
+            if len(task.datasets) > 1:
+                print(f"🚀 检测到 {len(task.datasets)} 个数据集，启用并行处理")
+                import concurrent.futures
+                
+                def run_single_dataset(dataset_name):
+                    """运行单个数据集的评测"""
+                    print(f"▶️ 开始评测数据集: {dataset_name}")
+                    
+                    # 为每个数据集创建独立的配置
+                    dataset_config = config_params.copy()
+                    dataset_config['datasets'] = [dataset_name]
+                    
+                    # 创建独立的TaskConfig
+                    task_config = TaskConfig(**dataset_config)
+                    result = run_task(task_config)
+                    
+                    print(f"✅ 数据集 {dataset_name} 评测完成")
+                    return dataset_name, result
+                
+                # 并行执行所有数据集
+                results = {}
+                with concurrent.futures.ThreadPoolExecutor(max_workers=len(task.datasets)) as executor:
+                    future_to_dataset = {
+                        executor.submit(run_single_dataset, dataset): dataset 
+                        for dataset in task.datasets
+                    }
+                    
+                    for future in concurrent.futures.as_completed(future_to_dataset):
+                        dataset_name = future_to_dataset[future]
+                        try:
+                            dataset_name, result = future.result()
+                            results[dataset_name] = result
+                        except Exception as exc:
+                            print(f"❌ 数据集 {dataset_name} 评测失败: {exc}")
+                            raise exc
+                
+                print(f"🎉 所有 {len(task.datasets)} 个数据集并行评测完成")
+            else:
+                # 单个数据集，使用原有逻辑
+                task_config = TaskConfig(**config_params)
+                results = run_task(task_config)
             
             print(f"Python API 执行完成，结果数量: {len(results) if results else 0}")
             

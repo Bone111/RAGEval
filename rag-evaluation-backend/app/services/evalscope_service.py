@@ -411,6 +411,22 @@ class EvalScopeService:
             logger.error(f"发送Celery取消信号失败: {e}")
             # 即使Celery取消失败，数据库状态已更新，任务仍会被标记为取消
         
+        # 终止评测进程 - 新增功能
+        try:
+            from app.core.process_manager import ProcessManager
+            
+            process_manager = ProcessManager(task_id)
+            success, terminated_processes = process_manager.pause_task()
+            
+            if success and terminated_processes:
+                logger.info(f"任务 {task_id} 已终止评测进程: {terminated_processes}")
+            else:
+                logger.warning(f"任务 {task_id} 未找到运行的评测进程")
+                
+        except Exception as e:
+            logger.error(f"终止评测进程失败: {e}")
+            # 即使进程终止失败，任务状态已更新为取消
+        
         return True
 
 

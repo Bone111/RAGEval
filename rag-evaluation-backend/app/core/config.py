@@ -125,8 +125,8 @@ class Settings(BaseSettings):
     EVALSCOPE_DB_UPDATE_INTERVAL: float = float(os.getenv("EVALSCOPE_DB_UPDATE_INTERVAL", "1.0"))
     # WebSocket超时（秒）- 避免阻塞
     EVALSCOPE_WEBSOCKET_TIMEOUT: float = float(os.getenv("EVALSCOPE_WEBSOCKET_TIMEOUT", "0.5"))
-    # 是否启用Python API优先（False则直接用命令行，更快）
-    EVALSCOPE_PREFER_PYTHON_API: bool = os.getenv("EVALSCOPE_PREFER_PYTHON_API", "false").lower() == "true"
+    # 是否启用Python API优先（True则优先使用Python API，更可靠）
+    EVALSCOPE_PREFER_PYTHON_API: bool = os.getenv("EVALSCOPE_PREFER_PYTHON_API", "true").lower() == "true"
 
     model_config = SettingsConfigDict(
         env_file=".env",
