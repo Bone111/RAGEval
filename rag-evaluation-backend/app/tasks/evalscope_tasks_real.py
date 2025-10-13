@@ -490,7 +490,22 @@ def parse_evalscope_output(stdout_lines: List[str], task_id: int = None) -> List
                                     if 'categories' in metric:
                                         for category in metric['categories']:
                                             if 'subsets' in category:
-                                                # 计算加权平均分数
+                                                # 为每个子集单独创建结果记录
+                                                for subset in category['subsets']:
+                                                    subset_score = subset['score']
+                                                    subset_samples = subset['num']
+                                                    
+                                                    results.append({
+                                                        'benchmark': report_data.get('dataset_name', 'unknown'),
+                                                        'metric_name': metric.get('name', 'accuracy'),
+                                                        'metric_value': subset_score,  # 保持0-1范围
+                                                        'category': category.get('name', 'default'),
+                                                        'subset_name': subset['name'],  # 单独的子集名称
+                                                        'num_samples': subset_samples
+                                                    })
+                                                    print(f"INFO: 添加子集结果: {report_data.get('dataset_name', 'unknown')} - {subset['name']} - {subset_score:.4f} ({subset_samples}样本)")
+                                                
+                                                # 同时添加加权平均结果
                                                 total_samples = 0
                                                 weighted_score_sum = 0
                                                 subset_names = []
@@ -502,7 +517,6 @@ def parse_evalscope_output(stdout_lines: List[str], task_id: int = None) -> List
                                                     total_samples += subset_samples
                                                     subset_names.append(subset['name'])
                                                 
-                                                # 计算加权平均分数（保持0-1范围，不转换为百分比）
                                                 if total_samples > 0:
                                                     avg_score = weighted_score_sum / total_samples
                                                     
@@ -510,11 +524,11 @@ def parse_evalscope_output(stdout_lines: List[str], task_id: int = None) -> List
                                                         'benchmark': report_data.get('dataset_name', 'unknown'),
                                                         'metric_name': metric.get('name', 'accuracy'),
                                                         'metric_value': avg_score,  # 保持0-1范围
-                                                        'category': 'default',
-                                                        'subset_name': '+'.join(subset_names),  # 合并子集名称
+                                                        'category': category.get('name', 'default'),
+                                                        'subset_name': 'average',  # 标记为平均分
                                                         'num_samples': total_samples
                                                     })
-                                                    print(f"INFO: 添加合并结果: {report_data.get('dataset_name', 'unknown')} - {avg_score:.4f} ({total_samples}样本, 子集: {', '.join(subset_names)})")
+                                                    print(f"INFO: 添加平均结果: {report_data.get('dataset_name', 'unknown')} - 平均分 - {avg_score:.4f} ({total_samples}样本)")
                                     else:
                                         # 如果没有子集，直接使用metric数据
                                         score = metric.get('score', 0)  # 保持0-1范围

@@ -446,7 +446,21 @@ class ResultParser:
                             if 'categories' in metric:
                                 for category in metric['categories']:
                                     if 'subsets' in category:
-                                        # 计算加权平均
+                                        # 为每个子集单独创建结果记录
+                                        for subset in category['subsets']:
+                                            subset_score = subset.get('score', 0)
+                                            subset_samples = subset.get('num', 0)
+                                            
+                                            results.append({
+                                                'benchmark': dataset_name,
+                                                'metric_name': metric.get('name', 'accuracy'),
+                                                'metric_value': subset_score,
+                                                'category': category.get('name', 'default'),
+                                                'subset_name': subset.get('name', 'unknown'),
+                                                'num_samples': subset_samples
+                                            })
+                                        
+                                        # 同时添加加权平均结果
                                         total_samples = 0
                                         weighted_score = 0
                                         
@@ -462,8 +476,8 @@ class ResultParser:
                                                 'benchmark': dataset_name,
                                                 'metric_name': metric.get('name', 'accuracy'),
                                                 'metric_value': avg_score,
-                                                'category': 'default',
-                                                'subset_name': 'aggregated',
+                                                'category': category.get('name', 'default'),
+                                                'subset_name': 'average',
                                                 'num_samples': total_samples
                                             })
                             else:
@@ -564,6 +578,10 @@ def run_real_evaluation_task(self, task_id: int):
         
         # 启动进度监控
         reporter.start_progress_monitoring(work_dir)
+        
+        # 初始化进程管理器
+        from app.core.process_manager import ProcessManager
+        process_manager = ProcessManager(task_id)
         
         # 4. 解析模型配置（任务创建时已经解析，这里直接使用）
         model_name = task.model_id
@@ -679,6 +697,13 @@ def run_real_evaluation_task(self, task_id: int):
                 if getattr(self.request, 'cancelled', False):
                     reporter.log("WARNING", f"⚠️ 任务已被取消，跳过数据集 {dataset_name}")
                     continue
+                
+                # 执行评测前保存进程信息（模拟进程启动）
+                import os
+                current_pid = os.getpid()
+                cmd_args = ["python", "-m", "evalscope.cli.cli", "eval", dataset_name]
+                process_manager.save_process_info(dataset_name, current_pid, cmd_args)
+                reporter.log("INFO", f"💾 已保存进程信息: {dataset_name} -> PID {current_pid}")
                 
                 # 执行评测
                 result = run_task(eval_config)

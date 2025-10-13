@@ -31,6 +31,17 @@ import type { EvalTask, EvalResult } from '@/types/evalscope.types';
 
 const { Title, Text } = Typography;
 
+// 添加样式
+const tableStyles = `
+  .average-row {
+    background-color: #fff7e6 !important;
+    font-weight: 500;
+  }
+  .average-row:hover {
+    background-color: #fff2d9 !important;
+  }
+`;
+
 const TaskResults: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -218,6 +229,34 @@ const TaskResults: React.FC = () => {
       render: (text: string) => <Tag color="blue">{text.toUpperCase()}</Tag>
     },
     {
+      title: '子集',
+      dataIndex: 'subset_name',
+      key: 'subset_name',
+      render: (subset: string) => {
+        if (!subset) return <Text type="secondary">-</Text>;
+        
+        // 特殊处理平均分
+        if (subset === 'average') {
+          return <Tag color="gold">平均分</Tag>;
+        }
+        
+        // 处理多个子集合并的情况（兼容旧数据）
+        if (subset.includes('+')) {
+          const subsets = subset.split('+');
+          return (
+            <Space wrap>
+              {subsets.map((s, index) => (
+                <Tag key={index} color="cyan">{s}</Tag>
+              ))}
+            </Space>
+          );
+        }
+        
+        // 单个子集
+        return <Tag color="cyan">{subset}</Tag>;
+      }
+    },
+    {
       title: '指标',
       dataIndex: 'metric_name',
       key: 'metric_name'
@@ -275,6 +314,7 @@ const TaskResults: React.FC = () => {
 
   return (
     <div style={{ padding: '24px' }}>
+      <style>{tableStyles}</style>
       {/* 标题和操作栏 */}
       <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
         <Col>
@@ -352,7 +392,7 @@ const TaskResults: React.FC = () => {
               />
               {bestResult && (
                 <Text type="secondary" style={{ fontSize: '12px' }}>
-                  {bestResult.benchmark}
+                  {bestResult.benchmark} {bestResult.subset_name && bestResult.subset_name !== 'average' ? `(${bestResult.subset_name})` : ''}
                 </Text>
               )}
             </Card>
@@ -410,6 +450,13 @@ const TaskResults: React.FC = () => {
           rowKey={(record) => `${record.benchmark}-${record.metric_name}-${record.subset_name}`}
           pagination={false}
           size="middle"
+          rowClassName={(record) => {
+            // 为平均分添加特殊样式
+            if (record.subset_name === 'average') {
+              return 'average-row';
+            }
+            return '';
+          }}
         />
       </Card>
     </div>

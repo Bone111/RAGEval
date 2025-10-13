@@ -516,27 +516,31 @@ async def download_multiple_benchmarks(benchmark_names: List[str], force_redownl
     from app.services.benchmark_registry import BenchmarkRegistry
     
     # 数据集的ModelScope映射
+    # 注意：当前ModelScope上的数据集仓库均不可用，需要更新为正确的仓库名称
     DATASET_MAPPING = {
-        # 基础LLM基准测试
-        'mmlu': 'modelscope/mmlu',
-        'cmmlu': 'modelscope/cmmlu',
-        'ceval': 'modelscope/ceval-exam',
-        'gsm8k': 'modelscope/gsm8k',
-        'competition_math': 'AI-ModelScope/competition_math',
-        'mathbench': 'AI-ModelScope/mathbench',
-        'arc': 'modelscope/ai2_arc',
-        'arc_challenge': 'modelscope/ai2_arc',
-        'humaneval': 'modelscope/humaneval',
-        'hellaswag': 'modelscope/hellaswag',
-        'winogrande': 'modelscope/winogrande',
-        'bbh': 'AI-ModelScope/bbh',
-        'drop': 'AI-ModelScope/drop',
-        'race': 'AI-ModelScope/race',
-        'alpaca_eval': 'AI-ModelScope/alpaca_eval',
+        # 基础LLM基准测试 - 需要验证仓库是否存在
+        # 'mmlu': 'modelscope/mmlu',  # 暂时禁用
+        # 'cmmlu': 'modelscope/cmmlu',  # 暂时禁用
+        # 'ceval': 'modelscope/ceval-exam',  # 暂时禁用
+        # 'gsm8k': 'modelscope/gsm8k',  # 暂时禁用
+        # 'competition_math': 'AI-ModelScope/competition_math',  # 暂时禁用
+        # 'mathbench': 'AI-ModelScope/mathbench',  # 暂时禁用
         
-        # 多模态基准测试
-        'mmmu': 'AI-ModelScope/mmmu',
-        'mmmu_pro': 'AI-ModelScope/mmmu_pro',
+        # ARC数据集暂时不可用 - ModelScope上不存在
+        # 'arc': 'AI-ModelScope/ai2_arc',
+        # 'arc_challenge': 'AI-ModelScope/ai2_arc',
+        
+        # 'humaneval': 'modelscope/humaneval',  # 暂时禁用
+        # 'hellaswag': 'modelscope/hellaswag',  # 暂时禁用
+        # 'winogrande': 'modelscope/winogrande',  # 暂时禁用
+        # 'bbh': 'AI-ModelScope/bbh',  # 暂时禁用
+        # 'drop': 'AI-ModelScope/drop',  # 暂时禁用
+        # 'race': 'AI-ModelScope/race',  # 暂时禁用
+        # 'alpaca_eval': 'AI-ModelScope/alpaca_eval',  # 暂时禁用
+        
+        # 多模态基准测试 - 需要验证仓库是否存在
+        # 'mmmu': 'AI-ModelScope/mmmu',  # 暂时禁用
+        # 'mmmu_pro': 'AI-ModelScope/mmmu_pro',  # 暂时禁用
         'mm_bench': 'AI-ModelScope/mm_bench',
         'mm_star': 'AI-ModelScope/mm_star',
         
@@ -615,7 +619,7 @@ async def download_multiple_benchmarks(benchmark_names: List[str], force_redownl
             if not dataset_id:
                 failed_downloads.append({
                     'name': name, 
-                    'error': f'暂未支持下载 {name} 数据集'
+                    'error': f'暂未支持下载 {name} 数据集 - ModelScope仓库不可用'
                 })
                 continue
                 

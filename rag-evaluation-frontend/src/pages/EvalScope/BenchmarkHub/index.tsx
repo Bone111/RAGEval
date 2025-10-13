@@ -42,7 +42,8 @@ import {
   ArrowUpOutlined,
   ArrowDownOutlined,
   AppstoreOutlined,
-  UnorderedListOutlined
+  UnorderedListOutlined,
+  TranslationOutlined
 } from '@ant-design/icons';
 
 const { Title, Text, Paragraph } = Typography;
@@ -83,6 +84,12 @@ const BenchmarkHubPage: React.FC = () => {
   const [loadingSubsets, setLoadingSubsets] = useState(false);
   const [subsetSearchQuery, setSubsetSearchQuery] = useState('');
   const [selectedSubsetCategory, setSelectedSubsetCategory] = useState<string>('all');
+  const [selectedSubset, setSelectedSubset] = useState<any>(null);
+  const [subsetSamples, setSubsetSamples] = useState<any>(null);
+  const [loadingSamples, setLoadingSamples] = useState(false);
+  const [isDescriptionTranslated, setIsDescriptionTranslated] = useState(false);
+  const [translatedDescription, setTranslatedDescription] = useState<string>('');
+  const [translating, setTranslating] = useState(false);
 
   // API 调用函数
   const fetchBenchmarks = async (category?: string, language?: string) => {
@@ -406,13 +413,116 @@ const BenchmarkHubPage: React.FC = () => {
     }
   };
 
+  // 获取子集样本
+  const fetchSubsetSamples = async (benchmarkName: string, subsetName: string) => {
+    setLoadingSamples(true);
+    try {
+      const url = `/api/v1/evalscope/benchmarks/${benchmarkName}/subsets/${subsetName}/samples?limit=3`;
+      console.log('请求子集样本URL:', url);
+      
+      const response = await fetch(url);
+      console.log('响应状态:', response.status);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API错误响应:', errorText);
+        throw new Error(`获取子集样本失败: ${response.status} ${errorText}`);
+      }
+      
+      const data = await response.json();
+      console.log('获取到的样本数据:', data);
+      setSubsetSamples(data);
+    } catch (error) {
+      console.error('获取子集样本失败:', error);
+      message.error(`获取子集样本失败: ${error.message}`);
+    } finally {
+      setLoadingSamples(false);
+    }
+  };
+
+  // 翻译描述文本
+  const translateDescription = async (text: string) => {
+    if (!text || text.trim() === '') return '';
+    
+    setTranslating(true);
+    try {
+      // 检测是否包含中文字符
+      const hasChinese = /[\u4e00-\u9fff]/.test(text);
+      
+      // 如果已经包含中文，直接返回原文
+      if (hasChinese) {
+        setTranslatedDescription(text);
+        return text;
+      }
+
+      console.log('正在翻译文本:', text);
+
+      // 调用翻译API
+      const response = await fetch('/api/v1/evalscope/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: text,
+          target_lang: 'zh'
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('翻译API响应错误:', response.status, errorText);
+        throw new Error(`翻译请求失败: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('翻译结果:', result);
+      return result.translated_text || text;
+    } catch (error) {
+      console.error('翻译失败:', error);
+      // 如果翻译失败，返回原文
+      return text;
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  // 处理翻译切换
+  const handleTranslationToggle = async () => {
+    if (!selectedBenchmark) return;
+
+    console.log('翻译切换点击，当前状态:', {
+      isDescriptionTranslated,
+      hasTranslatedDescription: !!translatedDescription,
+      originalDescription: selectedBenchmark.description
+    });
+
+    if (!isDescriptionTranslated) {
+      // 需要翻译
+      if (!translatedDescription) {
+        console.log('开始翻译...');
+        const translated = await translateDescription(selectedBenchmark.description);
+        console.log('翻译完成，结果:', translated);
+        setTranslatedDescription(translated);
+      }
+      setIsDescriptionTranslated(true);
+    } else {
+      // 切换回原文
+      console.log('切换回原文');
+      setIsDescriptionTranslated(false);
+    }
+  };
+
   // 处理详情Modal打开
   const handleModalOpen = (benchmark: BenchmarkInfo) => {
     setSelectedBenchmark(benchmark);
     setModalVisible(true);
+    // 重置翻译状态
+    setIsDescriptionTranslated(false);
+    setTranslatedDescription('');
     // 重置子集筛选状态
     setSubsetSearchQuery('');
     setSelectedSubsetCategory('all');
+    setSelectedSubset(null);
+    setSubsetSamples(null);
     // 如果有子集，获取子集详情
     if (benchmark.num_subsets && benchmark.num_subsets > 1) {
       fetchSubsets(benchmark.name);
@@ -882,8 +992,32 @@ const BenchmarkHubPage: React.FC = () => {
             </Descriptions>
 
             <div style={{ marginTop: 16 }}>
-              <Title level={4}>描述</Title>
-              <Paragraph>{selectedBenchmark.description}</Paragraph>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Title level={4} style={{ margin: 0 }}>描述</Title>
+                {(() => {
+                  // 检测描述是否包含中文字符
+                  const hasChinese = /[\u4e00-\u9fff]/.test(selectedBenchmark.description);
+                  // 如果包含中文，不显示翻译按钮
+                  if (hasChinese) return null;
+                  
+                  return (
+                    <Button 
+                      type="text" 
+                      size="small"
+                      icon={<TranslationOutlined />}
+                      loading={translating}
+                      onClick={handleTranslationToggle}
+                      title={isDescriptionTranslated ? '显示原文' : '翻译为中文'}
+                      disabled={translating}
+                    >
+                      {translating ? '翻译中...' : (isDescriptionTranslated ? '原文' : '中文')}
+                    </Button>
+                  );
+                })()}
+              </div>
+              <Paragraph>
+                {isDescriptionTranslated ? translatedDescription : selectedBenchmark.description}
+              </Paragraph>
             </div>
 
             {/* 子集详情 */}
@@ -997,6 +1131,18 @@ const BenchmarkHubPage: React.FC = () => {
                                           {subset.name}
                                         </div>
                                       }
+                                      extra={
+                                        <Button 
+                                          type="link" 
+                                          size="small"
+                                          onClick={() => {
+                                            setSelectedSubset(subset);
+                                            fetchSubsetSamples(selectedBenchmark.name, subset.id);
+                                          }}
+                                        >
+                                          查看样本
+                                        </Button>
+                                      }
                                     >
                                       <div style={{ fontSize: '11px', color: '#666' }}>
                                         {subset.description}
@@ -1013,6 +1159,87 @@ const BenchmarkHubPage: React.FC = () => {
                   ) : (
                     <div style={{ textAlign: 'center', padding: '20px' }}>
                       <Text type="secondary">正在加载子集详情...</Text>
+                    </div>
+                  )}
+                </Spin>
+              </div>
+            )}
+
+            {/* 子集样本详情 */}
+            {selectedSubset && (
+              <div style={{ marginTop: 16 }}>
+                <Title level={4}>
+                  子集样本 - {selectedSubset.name}
+                  <Button 
+                    type="link" 
+                    size="small"
+                    onClick={() => {
+                      setSelectedSubset(null);
+                      setSubsetSamples(null);
+                    }}
+                    style={{ marginLeft: 8 }}
+                  >
+                    关闭
+                  </Button>
+                </Title>
+                <Spin spinning={loadingSamples}>
+                  {subsetSamples ? (
+                    <div>
+                      <div style={{ marginBottom: 16 }}>
+                        <Text type="secondary">
+                          共 {subsetSamples.total_samples} 个样本，显示前 {subsetSamples.returned_samples} 个
+                        </Text>
+                      </div>
+                      <div style={{ 
+                        maxHeight: '300px', 
+                        overflowY: 'auto', 
+                        border: '1px solid #f0f0f0', 
+                        borderRadius: '6px',
+                        padding: '16px'
+                      }}>
+                        {subsetSamples.samples.map((sample: any, index: number) => (
+                          <Card 
+                            key={index}
+                            size="small" 
+                            style={{ marginBottom: 12 }}
+                            title={`题目 ${sample.index + 1}`}
+                          >
+                            <div style={{ marginBottom: 8 }}>
+                              <Text strong>题目：</Text>
+                              <div style={{ marginTop: 4, padding: '8px', backgroundColor: '#fafafa', borderRadius: '4px' }}>
+                                {sample.question}
+                              </div>
+                            </div>
+                            {sample.choices && sample.choices.length > 0 && (
+                              <div style={{ marginBottom: 8 }}>
+                                <Text strong>选项：</Text>
+                                <div style={{ marginTop: 4 }}>
+                                  {sample.choices.map((choice: string, choiceIndex: number) => (
+                                    <div key={choiceIndex} style={{ 
+                                      padding: '4px 8px', 
+                                      margin: '2px 0',
+                                      backgroundColor: choiceIndex === sample.answer ? '#e6f7ff' : '#fafafa',
+                                      borderRadius: '4px',
+                                      border: choiceIndex === sample.answer ? '1px solid #1890ff' : '1px solid #f0f0f0'
+                                    }}>
+                                      {String.fromCharCode(65 + choiceIndex)}. {choice}
+                                      {choiceIndex === sample.answer && <Text type="success" style={{ marginLeft: 8 }}>(正确答案)</Text>}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            <div>
+                              <Text strong>学科：</Text>
+                              <Tag color="blue">{sample.subject}</Tag>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '20px' }}>
+                      <Text type="secondary">正在加载样本数据...</Text>
                     </div>
                   )}
                 </Spin>

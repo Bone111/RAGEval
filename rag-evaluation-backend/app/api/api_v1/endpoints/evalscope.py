@@ -225,28 +225,64 @@ async def get_task_dataset_progress(
     dataset_progress = {}
     
     # 数据集配置映射（从配置文件获取subset_list）
-    dataset_configs = {
-        'gsm8k': {'subsets': ['main'], 'limit': 5},
-        'math_500': {'subsets': ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5'], 'limit': 5},
-        'competition_math': {'subsets': ['Level 1', 'Level 2', 'Level 3', 'Level 4', 'Level 5'], 'limit': 5},
-        'mmlu': {'subsets': [
-            'abstract_algebra', 'anatomy', 'astronomy', 'business_ethics', 'clinical_knowledge',
-            'college_biology', 'college_chemistry', 'college_computer_science', 'college_mathematics',
-            'college_physics', 'college_medicine', 'computer_security', 'conceptual_physics',
-            'econometrics', 'electrical_engineering', 'elementary_mathematics', 'formal_logic',
-            'global_facts', 'high_school_biology', 'high_school_chemistry', 'high_school_computer_science',
-            'high_school_european_history', 'high_school_geography', 'high_school_government_and_politics',
-            'high_school_macroeconomics', 'high_school_mathematics', 'high_school_microeconomics',
-            'high_school_physics', 'high_school_psychology', 'high_school_statistics', 'high_school_us_history',
-            'high_school_world_history', 'human_aging', 'human_sexuality', 'international_law',
-            'jurisprudence', 'logical_fallacies', 'machine_learning', 'management', 'marketing',
-            'medical_genetics', 'miscellaneous', 'moral_disputes', 'moral_scenarios', 'nutrition',
-            'philosophy', 'prehistory', 'professional_accounting', 'professional_law', 'professional_medicine',
-            'professional_psychology', 'public_relations', 'security_studies', 'sociology', 'us_foreign_policy',
-            'virology', 'world_religions'
-        ], 'limit': 5},
-        'arc': {'subsets': ['challenge', 'easy'], 'limit': 5}
-    }
+    dataset_configs = {}
+    
+    # 动态从任务配置文件中读取subset_list
+    for dataset_name in task.datasets:
+        # 查找配置文件
+        config_files = []
+        if task.work_dir:
+            # 尝试多个可能的路径
+            possible_paths = [
+                Path(task.work_dir) / dataset_name / "configs",
+                Path(f"outputs/evalscope_task_{task_id}") / dataset_name / "configs",
+            ]
+            
+            for path_pattern in possible_paths:
+                if path_pattern.exists():
+                    config_files = list(path_pattern.glob("*.yaml"))
+                    break
+            
+            # 如果直接路径不存在，尝试查找带时间戳的路径
+            if not config_files:
+                import glob
+                patterns = [
+                    f"outputs/evalscope_task_{task_id}/{dataset_name}/*/configs/*.yaml",
+                    f"outputs/evalscope_task_{task_id}/*/configs/*.yaml"
+                ]
+                for pattern in patterns:
+                    config_files = [Path(f) for f in glob.glob(pattern)]
+                    if config_files:
+                        break
+        
+        # 读取配置文件获取subset_list
+        subsets = []
+        limit = 5  # 默认限制
+        
+        if config_files:
+            try:
+                import yaml
+                with open(config_files[0], 'r', encoding='utf-8') as f:
+                    config_data = yaml.safe_load(f)
+                    
+                # 从dataset_args中获取subset_list
+                if 'dataset_args' in config_data and dataset_name in config_data['dataset_args']:
+                    dataset_config = config_data['dataset_args'][dataset_name]
+                    subsets = dataset_config.get('subset_list', [])
+                    limit = dataset_config.get('limit', 5)
+                    
+            except Exception as e:
+                print(f"读取配置文件失败: {e}")
+        
+        # 如果无法从配置文件读取，跳过该数据集
+        if not subsets:
+            print(f"警告: 无法从配置文件读取数据集 {dataset_name} 的subset_list，跳过该数据集")
+            continue
+        
+        dataset_configs[dataset_name] = {
+            'subsets': subsets,
+            'limit': limit
+        }
     
     # 如果task有dataset_args，优先使用
     if task.dataset_args:
@@ -279,14 +315,19 @@ async def get_task_dataset_progress(
             # 如果直接路径不存在，尝试查找带时间戳的路径
             if not predictions_dir:
                 import glob
-                pattern = f"outputs/evalscope_task_{task_id}/{dataset_name}/*/predictions"
-                matches = glob.glob(pattern)
-                if matches:
-                    predictions_dir = Path(matches[0])
-                    # 查找模型子目录
-                    model_dirs = list(predictions_dir.glob("*"))
-                    if model_dirs:
-                        predictions_dir = model_dirs[0]  # 使用第一个模型目录
+                patterns = [
+                    f"outputs/evalscope_task_{task_id}/{dataset_name}/*/predictions",
+                    f"outputs/evalscope_task_{task_id}/*/predictions"
+                ]
+                for pattern in patterns:
+                    matches = glob.glob(pattern)
+                    if matches:
+                        predictions_dir = Path(matches[0])
+                        # 查找模型子目录
+                        model_dirs = list(predictions_dir.glob("*"))
+                        if model_dirs:
+                            predictions_dir = model_dirs[0]  # 使用第一个模型目录
+                        break
         
         subset_progress = {}
         total_completed = 0
@@ -320,12 +361,24 @@ async def get_task_dataset_progress(
                     'progress': 0
                 }
         
+        # 确定数据集状态
+        if task.status == 'completed':
+            dataset_status = 'completed'
+        elif task.status == 'running':
+            dataset_status = 'running' if total_completed > 0 else 'pending'
+        elif task.status == 'paused':
+            dataset_status = 'paused'
+        elif task.status == 'failed':
+            dataset_status = 'failed'
+        else:
+            dataset_status = 'pending'
+        
         dataset_progress[dataset_name] = {
             'subsets': subset_progress,
             'total_completed': total_completed,
             'total_expected': total_expected,
             'overall_progress': min(int(total_completed / total_expected * 100), 100) if total_expected > 0 else 0,
-            'status': 'completed' if total_completed >= total_expected else 'running' if total_completed > 0 else 'pending'
+            'status': dataset_status
         }
     
     return {
@@ -392,8 +445,8 @@ async def pause_task(
         if not task:
             raise HTTPException(status_code=404, detail="任务不存在")
         
-        if task.status not in ['running']:
-            raise HTTPException(status_code=400, detail="只能暂停运行中的任务")
+        if task.status not in ['running', 'paused']:
+            raise HTTPException(status_code=400, detail="只能暂停运行中或已暂停的任务")
         
         # 使用进程管理器暂停任务
         process_manager = ProcessManager(task_id)
@@ -408,9 +461,10 @@ async def pause_task(
             task.extra_metadata['terminated_processes'] = terminated_processes
             db.commit()
             
-            message = f"任务已暂停，终止了 {len(terminated_processes)} 个进程"
             if terminated_processes:
-                message += f": {', '.join(terminated_processes)}"
+                message = f"任务已暂停，终止了 {len(terminated_processes)} 个进程: {', '.join(terminated_processes)}"
+            else:
+                message = "任务已暂停，未发现运行中的进程"
             
             logger.info(f"任务 {task_id} 暂停成功: {message}")
             return {"success": True, "message": message, "terminated_processes": terminated_processes}
@@ -535,17 +589,20 @@ async def check_task_results(
         has_results = False
         
         if task_output_dir.exists():
-            # 检查是否有predictions目录
-            predictions_pattern = str(task_output_dir / "*" / "predictions")
+            # 检查是否有predictions目录（支持多层目录结构）
+            predictions_pattern = str(task_output_dir / "*" / "*" / "predictions")
             predictions_dirs = glob.glob(predictions_pattern)
             
             if predictions_dirs:
-                # 检查是否有实际的预测文件
+                # 检查是否有实际的预测文件（包括子目录中的文件）
                 for pred_dir in predictions_dirs:
                     pred_path = Path(pred_dir)
-                    if pred_path.exists() and any(pred_path.glob("*.jsonl")):
-                        has_results = True
-                        break
+                    if pred_path.exists():
+                        # 检查当前目录和所有子目录中的jsonl文件
+                        jsonl_files = list(pred_path.rglob("*.jsonl"))
+                        if jsonl_files:
+                            has_results = True
+                            break
         
         return {
             "task_id": task_id,
