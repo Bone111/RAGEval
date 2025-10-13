@@ -178,7 +178,8 @@ class EvalScopeAPIAdapter:
         model_args: Optional[Dict] = None,
         generation_config: Optional[Dict] = None,
         dataset_args: Optional[Dict] = None,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
+        use_cache: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         构建EvalScope TaskConfig参数
@@ -203,6 +204,10 @@ class EvalScopeAPIAdapter:
             'eval_type': eval_type,
             'work_dir': work_dir
         }
+        
+        # 添加use_cache参数（如果提供）
+        if use_cache is not None:
+            config_params['use_cache'] = use_cache
         
         # 添加limit参数
         if limit is not None:

@@ -31,41 +31,41 @@ class BenchmarkRegistry:
     # EvalScope官方支持的LLM benchmarks（根据文档整理）
     OFFICIAL_LLM_BENCHMARKS = {
         # 通用能力
-        'mmlu': {'display_name': 'MMLU', 'category': '通用能力', 'language': 'English', 'num_samples': 14042, 'file_size': '89 MB'},
-        'cmmlu': {'display_name': 'CMMLU', 'category': '中文能力', 'language': 'Chinese', 'num_samples': 11528, 'file_size': '76 MB'},
-        'ceval': {'display_name': 'C-Eval', 'category': '中文能力', 'language': 'Chinese', 'num_samples': 13948, 'file_size': '92 MB'},
+        'mmlu': {'display_name': 'MMLU', 'category': '通用能力', 'language': 'English', 'num_samples': 14042, 'file_size': '89 MB', 'num_subsets': 57},
+        'cmmlu': {'display_name': 'CMMLU', 'category': '中文能力', 'language': 'Chinese', 'num_samples': 11528, 'file_size': '76 MB', 'num_subsets': 67},
+        'ceval': {'display_name': 'C-Eval', 'category': '中文能力', 'language': 'Chinese', 'num_samples': 13948, 'file_size': '92 MB', 'num_subsets': 52},
         
         # 数学推理
-        'gsm8k': {'display_name': 'GSM8K', 'category': '数学推理', 'language': 'English', 'num_samples': 1319, 'file_size': '12 MB'},
-        'competition_math': {'display_name': 'MATH', 'category': '数学推理', 'language': 'English', 'num_samples': 5000, 'file_size': '45 MB'},
+        'gsm8k': {'display_name': 'GSM8K', 'category': '数学推理', 'language': 'English', 'num_samples': 1319, 'file_size': '12 MB', 'num_subsets': 1},
+        'competition_math': {'display_name': 'MATH', 'category': '数学推理', 'language': 'English', 'num_samples': 5000, 'file_size': '45 MB', 'num_subsets': 5},
         
         # 科学推理
-        'arc': {'display_name': 'ARC', 'category': '科学推理', 'language': 'English', 'num_samples': 7787, 'file_size': '25 MB'},
-        'arc_challenge': {'display_name': 'ARC-Challenge', 'category': '科学推理', 'language': 'English', 'num_samples': 1172, 'file_size': '12 MB'},
+        'arc': {'display_name': 'ARC', 'category': '科学推理', 'language': 'English', 'num_samples': 7787, 'file_size': '25 MB', 'num_subsets': 2},
+        'arc_challenge': {'display_name': 'ARC-Challenge', 'category': '科学推理', 'language': 'English', 'num_samples': 1172, 'file_size': '12 MB', 'num_subsets': 1},
         
         # 代码生成
-        'humaneval': {'display_name': 'HumanEval', 'category': '代码生成', 'language': 'English', 'num_samples': 164, 'file_size': '3 MB'},
+        'humaneval': {'display_name': 'HumanEval', 'category': '代码生成', 'language': 'English', 'num_samples': 164, 'file_size': '3 MB', 'num_subsets': 1},
         
         # 常识推理
-        'hellaswag': {'display_name': 'HellaSwag', 'category': '常识推理', 'language': 'English', 'num_samples': 10042, 'file_size': '68 MB'},
-        'winogrande': {'display_name': 'WinoGrande', 'category': '常识推理', 'language': 'English', 'num_samples': 1767, 'file_size': '5 MB'},
+        'hellaswag': {'display_name': 'HellaSwag', 'category': '常识推理', 'language': 'English', 'num_samples': 10042, 'file_size': '68 MB', 'num_subsets': 1},
+        'winogrande': {'display_name': 'WinoGrande', 'category': '常识推理', 'language': 'English', 'num_samples': 1767, 'file_size': '5 MB', 'num_subsets': 1},
         
         # 困难推理
-        'bbh': {'display_name': 'BBH', 'category': '困难推理', 'language': 'English', 'num_samples': 6511, 'file_size': '59 MB'},
-        'drop': {'display_name': 'DROP', 'category': '困难推理', 'language': 'English', 'num_samples': 9536, 'file_size': '125 MB'},
+        'bbh': {'display_name': 'BBH', 'category': '困难推理', 'language': 'English', 'num_samples': 6511, 'file_size': '59 MB', 'num_subsets': 27},
+        'drop': {'display_name': 'DROP', 'category': '困难推理', 'language': 'English', 'num_samples': 9536, 'file_size': '125 MB', 'num_subsets': 1},
         
         # 阅读理解
-        'race': {'display_name': 'RACE', 'category': '阅读理解', 'language': 'English', 'num_samples': 25047, 'file_size': '156 MB'},
+        'race': {'display_name': 'RACE', 'category': '阅读理解', 'language': 'English', 'num_samples': 25047, 'file_size': '156 MB', 'num_subsets': 2},
         
         # 对话与指令
-        'alpaca_eval': {'display_name': 'AlpacaEval', 'category': '对话能力', 'language': 'English', 'num_samples': 805, 'file_size': '15 MB'},
+        'alpaca_eval': {'display_name': 'AlpacaEval', 'category': '对话能力', 'language': 'English', 'num_samples': 805, 'file_size': '15 MB', 'num_subsets': 1},
         
         # 安全与对齐
     }
     
     # VLM benchmarks
     OFFICIAL_VLM_BENCHMARKS = {
-        'mmmu': {'display_name': 'MMMU', 'category': '多模态理解', 'language': 'English', 'num_samples': 11500, 'file_size': '1.5 GB'},
+        'mmmu': {'display_name': 'MMMU', 'category': '多模态理解', 'language': 'English', 'num_samples': 11500, 'file_size': '1.5 GB', 'num_subsets': 30},
     }
     
     @classmethod
@@ -160,7 +160,8 @@ class BenchmarkRegistry:
             'file_size': api_data.get('file_size', '~50 MB'),
             'tags': api_data.get('tags', []),
             'type': api_data.get('type', 'llm'),
-            'source': 'api'
+            'source': 'api',
+            'num_subsets': api_data.get('num_subsets', 1)  # 默认1个子集
         }
     
     @classmethod
@@ -192,7 +193,8 @@ class BenchmarkRegistry:
             'description': description,
             'tags': tags + cls._generate_tags(name, {'category': category}),
             'type': benchmark_type,
-            'source': 'evalscope'
+            'source': 'evalscope',
+            'num_subsets': cls._estimate_subsets(name)  # 估算子集数量
         }
     
     @classmethod
@@ -269,6 +271,19 @@ class BenchmarkRegistry:
         return known_sizes.get(name.lower(), '~50 MB')  # 默认估算
     
     @classmethod
+    def _estimate_subsets(cls, name: str) -> int:
+        """估算子集数量"""
+        # 基于已知数据估算
+        known_subsets = {
+            'mmlu': 57, 'cmmlu': 67, 'ceval': 52,
+            'gsm8k': 1, 'competition_math': 5, 'humaneval': 1,
+            'arc': 2, 'hellaswag': 1, 'bbh': 27, 'drop': 1,
+            'race': 2, 'alpaca_eval': 1, 'mmmu': 30,
+            'math_500': 5
+        }
+        return known_subsets.get(name.lower(), 1)  # 默认1个子集
+    
+    @classmethod
     def get_all_benchmarks(cls) -> Dict[str, Dict[str, Any]]:
         """获取所有支持的benchmarks - 优先使用EvalScope原生基准，失败时回退到官方列表"""
         # 检查缓存
@@ -309,73 +324,73 @@ class BenchmarkRegistry:
         # ModelScope官方支持的基准列表（基于官方文档）
         OFFICIAL_MODELSCOPE_BENCHMARKS = {
             # 基础LLM基准
-            'mmlu': {'display_name': 'MMLU', 'category': '通用能力', 'language': 'English', 'num_samples': 14042, 'file_size': '89 MB'},
-            'cmmlu': {'display_name': 'CMMLU', 'category': '中文能力', 'language': 'Chinese', 'num_samples': 11528, 'file_size': '76 MB'},
-            'ceval': {'display_name': 'C-Eval', 'category': '中文能力', 'language': 'Chinese', 'num_samples': 13948, 'file_size': '92 MB'},
-            'gsm8k': {'display_name': 'GSM8K', 'category': '数学推理', 'language': 'English', 'num_samples': 1319, 'file_size': '12 MB'},
-            'competition_math': {'display_name': 'MATH', 'category': '数学推理', 'language': 'English', 'num_samples': 5000, 'file_size': '45 MB'},
-            'arc': {'display_name': 'ARC', 'category': '科学推理', 'language': 'English', 'num_samples': 7787, 'file_size': '25 MB'},
-            'humaneval': {'display_name': 'HumanEval', 'category': '代码生成', 'language': 'English', 'num_samples': 164, 'file_size': '3 MB'},
-            'hellaswag': {'display_name': 'HellaSwag', 'category': '常识推理', 'language': 'English', 'num_samples': 10042, 'file_size': '68 MB'},
-            'winogrande': {'display_name': 'WinoGrande', 'category': '常识推理', 'language': 'English', 'num_samples': 1767, 'file_size': '5 MB'},
-            'bbh': {'display_name': 'BBH', 'category': '困难推理', 'language': 'English', 'num_samples': 6511, 'file_size': '59 MB'},
-            'drop': {'display_name': 'DROP', 'category': '困难推理', 'language': 'English', 'num_samples': 9536, 'file_size': '125 MB'},
-            'race': {'display_name': 'RACE', 'category': '阅读理解', 'language': 'English', 'num_samples': 25047, 'file_size': '156 MB'},
-            'alpaca_eval': {'display_name': 'AlpacaEval', 'category': '对话能力', 'language': 'English', 'num_samples': 805, 'file_size': '15 MB'},
+            'mmlu': {'display_name': 'MMLU', 'category': '通用能力', 'language': 'English', 'num_samples': 14042, 'file_size': '89 MB', 'num_subsets': 57},
+            'cmmlu': {'display_name': 'CMMLU', 'category': '中文能力', 'language': 'Chinese', 'num_samples': 11528, 'file_size': '76 MB', 'num_subsets': 67},
+            'ceval': {'display_name': 'C-Eval', 'category': '中文能力', 'language': 'Chinese', 'num_samples': 13948, 'file_size': '92 MB', 'num_subsets': 52},
+            'gsm8k': {'display_name': 'GSM8K', 'category': '数学推理', 'language': 'English', 'num_samples': 1319, 'file_size': '12 MB', 'num_subsets': 1},
+            'competition_math': {'display_name': 'MATH', 'category': '数学推理', 'language': 'English', 'num_samples': 5000, 'file_size': '45 MB', 'num_subsets': 5},
+            'arc': {'display_name': 'ARC', 'category': '科学推理', 'language': 'English', 'num_samples': 7787, 'file_size': '25 MB', 'num_subsets': 2},
+            'humaneval': {'display_name': 'HumanEval', 'category': '代码生成', 'language': 'English', 'num_samples': 164, 'file_size': '3 MB', 'num_subsets': 1},
+            'hellaswag': {'display_name': 'HellaSwag', 'category': '常识推理', 'language': 'English', 'num_samples': 10042, 'file_size': '68 MB', 'num_subsets': 1},
+            'winogrande': {'display_name': 'WinoGrande', 'category': '常识推理', 'language': 'English', 'num_samples': 1767, 'file_size': '5 MB', 'num_subsets': 1},
+            'bbh': {'display_name': 'BBH', 'category': '困难推理', 'language': 'English', 'num_samples': 6511, 'file_size': '59 MB', 'num_subsets': 27},
+            'drop': {'display_name': 'DROP', 'category': '困难推理', 'language': 'English', 'num_samples': 9536, 'file_size': '125 MB', 'num_subsets': 1},
+            'race': {'display_name': 'RACE', 'category': '阅读理解', 'language': 'English', 'num_samples': 25047, 'file_size': '156 MB', 'num_subsets': 2},
+            'alpaca_eval': {'display_name': 'AlpacaEval', 'category': '对话能力', 'language': 'English', 'num_samples': 805, 'file_size': '15 MB', 'num_subsets': 1},
             
             # 多模态基准
-            'mmmu': {'display_name': 'MMMU', 'category': '多模态理解', 'language': 'English', 'num_samples': 11500, 'file_size': '1.5 GB'},
-            'mmmu_pro': {'display_name': 'MMMU-Pro', 'category': '多模态理解', 'language': 'English', 'num_samples': 2000, 'file_size': '300 MB'},
-            'mm_bench': {'display_name': 'MM-Bench', 'category': '多模态理解', 'language': 'English', 'num_samples': 1000, 'file_size': '200 MB'},
-            'mm_star': {'display_name': 'MM-Star', 'category': '多模态理解', 'language': 'English', 'num_samples': 1500, 'file_size': '250 MB'},
+            'mmmu': {'display_name': 'MMMU', 'category': '多模态理解', 'language': 'English', 'num_samples': 11500, 'file_size': '1.5 GB', 'num_subsets': 30},
+            'mmmu_pro': {'display_name': 'MMMU-Pro', 'category': '多模态理解', 'language': 'English', 'num_samples': 2000, 'file_size': '300 MB', 'num_subsets': 10},
+            'mm_bench': {'display_name': 'MM-Bench', 'category': '多模态理解', 'language': 'English', 'num_samples': 1000, 'file_size': '200 MB', 'num_subsets': 4},
+            'mm_star': {'display_name': 'MM-Star', 'category': '多模态理解', 'language': 'English', 'num_samples': 1500, 'file_size': '250 MB', 'num_subsets': 6},
             
             # 高级基准
-            'arena_hard': {'display_name': 'Arena-Hard', 'category': '对话能力', 'language': 'English', 'num_samples': 1000, 'file_size': '50 MB'},
-            'truthful_qa': {'display_name': 'TruthfulQA', 'category': '安全对齐', 'language': 'English', 'num_samples': 817, 'file_size': '20 MB'},
-            'needle_haystack': {'display_name': 'Needle-Haystack', 'category': '长文本理解', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB'},
+            'arena_hard': {'display_name': 'Arena-Hard', 'category': '对话能力', 'language': 'English', 'num_samples': 1000, 'file_size': '50 MB', 'num_subsets': 1},
+            'truthful_qa': {'display_name': 'TruthfulQA', 'category': '安全对齐', 'language': 'English', 'num_samples': 817, 'file_size': '20 MB', 'num_subsets': 1},
+            'needle_haystack': {'display_name': 'Needle-Haystack', 'category': '长文本理解', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB', 'num_subsets': 1},
             
             # 新增基准
-            'simple_qa': {'display_name': 'Simple-QA', 'category': '问答能力', 'language': 'English', 'num_samples': 1000, 'file_size': '15 MB'},
-            'docmath': {'display_name': 'DocMath', 'category': '数学推理', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB'},
-            'ifeval': {'display_name': 'IFEval', 'category': '指令遵循', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB'},
-            'iquiz': {'display_name': 'IQuiz', 'category': '知识问答', 'language': 'English', 'num_samples': 1000, 'file_size': '15 MB'},
-            'process_bench': {'display_name': 'Process-Bench', 'category': '过程推理', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB'},
-            'mmlu_redux': {'display_name': 'MMLU-Redux', 'category': '通用能力', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB'},
-            'omni_bench': {'display_name': 'Omni-Bench', 'category': '综合能力', 'language': 'English', 'num_samples': 1000, 'file_size': '40 MB'},
-            'real_world_qa': {'display_name': 'Real-World-QA', 'category': '现实问答', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB'},
-            'hle': {'display_name': 'HLE', 'category': '高级推理', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB'},
-            'general_qa': {'display_name': 'General-QA', 'category': '通用问答', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB'},
-            'data_collection': {'display_name': 'Data-Collection', 'category': '数据收集', 'language': 'English', 'num_samples': 1000, 'file_size': '35 MB'},
-            'aime25': {'display_name': 'AIME-25', 'category': '数学竞赛', 'language': 'English', 'num_samples': 1000, 'file_size': '15 MB'},
-            'aime24': {'display_name': 'AIME-24', 'category': '数学竞赛', 'language': 'English', 'num_samples': 1000, 'file_size': '15 MB'},
-            'general_mcq': {'display_name': 'General-MCQ', 'category': '多选题', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB'},
-            'tau_bench': {'display_name': 'TAU-Bench', 'category': '技术评估', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB'},
-            'tool_bench': {'display_name': 'Tool-Bench', 'category': '工具使用', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB'},
-            'olympiad_bench': {'display_name': 'Olympiad-Bench', 'category': '竞赛题', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB'},
-            'minerva_math': {'display_name': 'Minerva-Math', 'category': '数学推理', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB'},
-            'frames': {'display_name': 'Frames', 'category': '框架理解', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB'},
-            'trivia_qa': {'display_name': 'Trivia-QA', 'category': '知识问答', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB'},
-            'bfcl_v3': {'display_name': 'BFCL-v3', 'category': '基准测试', 'language': 'English', 'num_samples': 1000, 'file_size': '35 MB'},
-            'ai2d': {'display_name': 'AI2D', 'category': '图表理解', 'language': 'English', 'num_samples': 1000, 'file_size': '40 MB'},
-            'math_500': {'display_name': 'Math-500', 'category': '数学题', 'language': 'English', 'num_samples': 500, 'file_size': '10 MB'},
-            'general_t2i': {'display_name': 'General-T2I', 'category': '文本生成图像', 'language': 'English', 'num_samples': 1000, 'file_size': '50 MB'},
-            'tifa160': {'display_name': 'TIFA-160', 'category': '图像评估', 'language': 'English', 'num_samples': 160, 'file_size': '8 MB'},
-            'evalmuse': {'display_name': 'EvalMuse', 'category': '音乐评估', 'language': 'English', 'num_samples': 1000, 'file_size': '60 MB'},
-            'genai_bench': {'display_name': 'GenAI-Bench', 'category': '生成AI', 'language': 'English', 'num_samples': 1000, 'file_size': '45 MB'},
-            'hpdv2': {'display_name': 'HPD-v2', 'category': '高性能计算', 'language': 'English', 'num_samples': 1000, 'file_size': '40 MB'},
-            'amc': {'display_name': 'AMC', 'category': '数学竞赛', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB'},
-            'gedit': {'display_name': 'GEdit', 'category': '文本编辑', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB'},
-            'chinese_simpleqa': {'display_name': 'Chinese-SimpleQA', 'category': '中文问答', 'language': 'Chinese', 'num_samples': 1000, 'file_size': '20 MB'},
-            'health_bench': {'display_name': 'Health-Bench', 'category': '医疗健康', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB'},
-            'multi_if': {'display_name': 'Multi-IF', 'category': '多条件推理', 'language': 'English', 'num_samples': 1000, 'file_size': '35 MB'},
-            'musr': {'display_name': 'MuSR', 'category': '多步推理', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB'},
-            'math_vista': {'display_name': 'Math-Vista', 'category': '视觉数学', 'language': 'English', 'num_samples': 1000, 'file_size': '40 MB'},
-            'maritime_bench': {'display_name': 'Maritime-Bench', 'category': '海事知识', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB'},
-            'super_gpqa': {'display_name': 'Super-GPQA', 'category': '科学问答', 'language': 'English', 'num_samples': 1000, 'file_size': '35 MB'},
-            'live_code_bench': {'display_name': 'Live-Code-Bench', 'category': '代码执行', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB'},
-            'gpqa_diamond': {'display_name': 'GPQA-Diamond', 'category': '科学问答', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB'},
-            'general_arena': {'display_name': 'General-Arena', 'category': '综合竞技', 'language': 'English', 'num_samples': 1000, 'file_size': '40 MB'},
-            'cc_bench': {'display_name': 'CC-Bench', 'category': '代码理解', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB'},
+            'simple_qa': {'display_name': 'Simple-QA', 'category': '问答能力', 'language': 'English', 'num_samples': 1000, 'file_size': '15 MB', 'num_subsets': 1},
+            'docmath': {'display_name': 'DocMath', 'category': '数学推理', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB', 'num_subsets': 1},
+            'ifeval': {'display_name': 'IFEval', 'category': '指令遵循', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB', 'num_subsets': 1},
+            'iquiz': {'display_name': 'IQuiz', 'category': '知识问答', 'language': 'English', 'num_samples': 1000, 'file_size': '15 MB', 'num_subsets': 1},
+            'process_bench': {'display_name': 'Process-Bench', 'category': '过程推理', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB', 'num_subsets': 1},
+            'mmlu_redux': {'display_name': 'MMLU-Redux', 'category': '通用能力', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB', 'num_subsets': 1},
+            'omni_bench': {'display_name': 'Omni-Bench', 'category': '综合能力', 'language': 'English', 'num_samples': 1000, 'file_size': '40 MB', 'num_subsets': 1},
+            'real_world_qa': {'display_name': 'Real-World-QA', 'category': '现实问答', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB', 'num_subsets': 1},
+            'hle': {'display_name': 'HLE', 'category': '高级推理', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB', 'num_subsets': 1},
+            'general_qa': {'display_name': 'General-QA', 'category': '通用问答', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB', 'num_subsets': 1},
+            'data_collection': {'display_name': 'Data-Collection', 'category': '数据收集', 'language': 'English', 'num_samples': 1000, 'file_size': '35 MB', 'num_subsets': 1},
+            'aime25': {'display_name': 'AIME-25', 'category': '数学竞赛', 'language': 'English', 'num_samples': 1000, 'file_size': '15 MB', 'num_subsets': 1},
+            'aime24': {'display_name': 'AIME-24', 'category': '数学竞赛', 'language': 'English', 'num_samples': 1000, 'file_size': '15 MB', 'num_subsets': 1},
+            'general_mcq': {'display_name': 'General-MCQ', 'category': '多选题', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB', 'num_subsets': 1},
+            'tau_bench': {'display_name': 'TAU-Bench', 'category': '技术评估', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB', 'num_subsets': 1},
+            'tool_bench': {'display_name': 'Tool-Bench', 'category': '工具使用', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB', 'num_subsets': 1},
+            'olympiad_bench': {'display_name': 'Olympiad-Bench', 'category': '竞赛题', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB', 'num_subsets': 1},
+            'minerva_math': {'display_name': 'Minerva-Math', 'category': '数学推理', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB', 'num_subsets': 1},
+            'frames': {'display_name': 'Frames', 'category': '框架理解', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB', 'num_subsets': 1},
+            'trivia_qa': {'display_name': 'Trivia-QA', 'category': '知识问答', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB', 'num_subsets': 1},
+            'bfcl_v3': {'display_name': 'BFCL-v3', 'category': '基准测试', 'language': 'English', 'num_samples': 1000, 'file_size': '35 MB', 'num_subsets': 1},
+            'ai2d': {'display_name': 'AI2D', 'category': '图表理解', 'language': 'English', 'num_samples': 1000, 'file_size': '40 MB', 'num_subsets': 1},
+            'math_500': {'display_name': 'Math-500', 'category': '数学题', 'language': 'English', 'num_samples': 500, 'file_size': '10 MB', 'num_subsets': 5},
+            'general_t2i': {'display_name': 'General-T2I', 'category': '文本生成图像', 'language': 'English', 'num_samples': 1000, 'file_size': '50 MB', 'num_subsets': 1},
+            'tifa160': {'display_name': 'TIFA-160', 'category': '图像评估', 'language': 'English', 'num_samples': 160, 'file_size': '8 MB', 'num_subsets': 1},
+            'evalmuse': {'display_name': 'EvalMuse', 'category': '音乐评估', 'language': 'English', 'num_samples': 1000, 'file_size': '60 MB', 'num_subsets': 1},
+            'genai_bench': {'display_name': 'GenAI-Bench', 'category': '生成AI', 'language': 'English', 'num_samples': 1000, 'file_size': '45 MB', 'num_subsets': 1},
+            'hpdv2': {'display_name': 'HPD-v2', 'category': '高性能计算', 'language': 'English', 'num_samples': 1000, 'file_size': '40 MB', 'num_subsets': 1},
+            'amc': {'display_name': 'AMC', 'category': '数学竞赛', 'language': 'English', 'num_samples': 1000, 'file_size': '20 MB', 'num_subsets': 1},
+            'gedit': {'display_name': 'GEdit', 'category': '文本编辑', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB', 'num_subsets': 1},
+            'chinese_simpleqa': {'display_name': 'Chinese-SimpleQA', 'category': '中文问答', 'language': 'Chinese', 'num_samples': 1000, 'file_size': '20 MB', 'num_subsets': 1},
+            'health_bench': {'display_name': 'Health-Bench', 'category': '医疗健康', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB', 'num_subsets': 1},
+            'multi_if': {'display_name': 'Multi-IF', 'category': '多条件推理', 'language': 'English', 'num_samples': 1000, 'file_size': '35 MB', 'num_subsets': 1},
+            'musr': {'display_name': 'MuSR', 'category': '多步推理', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB', 'num_subsets': 1},
+            'math_vista': {'display_name': 'Math-Vista', 'category': '视觉数学', 'language': 'English', 'num_samples': 1000, 'file_size': '40 MB', 'num_subsets': 1},
+            'maritime_bench': {'display_name': 'Maritime-Bench', 'category': '海事知识', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB', 'num_subsets': 1},
+            'super_gpqa': {'display_name': 'Super-GPQA', 'category': '科学问答', 'language': 'English', 'num_samples': 1000, 'file_size': '35 MB', 'num_subsets': 1},
+            'live_code_bench': {'display_name': 'Live-Code-Bench', 'category': '代码执行', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB', 'num_subsets': 1},
+            'gpqa_diamond': {'display_name': 'GPQA-Diamond', 'category': '科学问答', 'language': 'English', 'num_samples': 1000, 'file_size': '30 MB', 'num_subsets': 1},
+            'general_arena': {'display_name': 'General-Arena', 'category': '综合竞技', 'language': 'English', 'num_samples': 1000, 'file_size': '40 MB', 'num_subsets': 1},
+            'cc_bench': {'display_name': 'CC-Bench', 'category': '代码理解', 'language': 'English', 'num_samples': 1000, 'file_size': '25 MB', 'num_subsets': 1},
         }
         
         official_benchmarks = {}

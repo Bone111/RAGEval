@@ -200,6 +200,13 @@ class SharedTaskPollingManager {
   isPollingActive(): boolean {
     return this.isPolling;
   }
+
+  /**
+   * 清理指定任务的缓存
+   */
+  clearTaskCache(taskId: number): void {
+    this.taskCache.delete(taskId);
+  }
 }
 
 /**
@@ -263,4 +270,5 @@ export function useSharedTaskPolling(
   };
 }
 
+export { SharedTaskPollingManager };
 export default SharedTaskPollingManager;

@@ -47,16 +47,12 @@ def get_model_configs(
     - 已认证：返回用户的个人配置
     - 未认证：返回第一个用户的配置（开发模式）
     """
-    # 如果未认证，使用第一个用户（开发模式）
+    # 开发模式：无认证时返回当前用户的模型配置
     if not current_user:
-        print("DEBUG - 未认证用户请求模型配置，使用第一个用户（开发模式）")
-        from sqlalchemy import text
-        user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
-        if not user_result:
-            print("DEBUG - 数据库中无用户，返回空列表")
-            return []
-        user_id = str(user_result.id)
-        print(f"DEBUG - 使用用户ID: {user_id}")
+        print("DEBUG - 未认证用户请求模型配置，使用当前用户配置（开发模式）")
+        # 直接使用 Bone 用户ID（简化处理）
+        user_id = "68f96cd0-3bab-46cd-84ee-ff751705cf52"
+        print(f"DEBUG - 使用当前用户ID: {user_id}")
     else:
         user_id = current_user.id
         print(f"DEBUG - 用户 {current_user.name} 请求模型配置")
@@ -178,16 +174,24 @@ def get_rag_configs(
     - 已认证：返回用户的个人配置
     - 未认证：返回第一个用户的配置（开发模式）
     """
-    # 如果未认证，使用第一个用户（开发模式）
+    # 开发模式：无认证时返回当前用户的RAG配置
     if not current_user:
-        print("DEBUG - 未认证用户请求RAG配置，使用第一个用户（开发模式）")
+        print("DEBUG - 未认证用户请求RAG配置，使用当前用户配置（开发模式）")
+        # 获取有RAG配置的用户（通常是当前使用系统的用户）
         from sqlalchemy import text
-        user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
+        user_result = db.execute(text("""
+            SELECT DISTINCT user_id FROM user_rag_configs 
+            WHERE is_active = true 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        """)).first()
+        
         if not user_result:
-            print("DEBUG - 数据库中无用户，返回空列表")
+            print("DEBUG - 没有找到任何RAG配置")
             return []
-        user_id = str(user_result.id)
-        print(f"DEBUG - 使用用户ID: {user_id}")
+        
+        user_id = str(user_result.user_id)
+        print(f"DEBUG - 使用当前用户ID: {user_id}")
     else:
         user_id = current_user.id
         print(f"DEBUG - 用户 {current_user.name} 请求RAG配置")

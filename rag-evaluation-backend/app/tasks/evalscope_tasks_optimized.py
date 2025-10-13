@@ -503,6 +503,12 @@ def run_real_evaluation_task(self, task_id: int):
         if not task:
             raise Exception(f"任务 {task_id} 不存在")
         
+        # 存储Celery任务ID到数据库
+        if not task.extra_metadata:
+            task.extra_metadata = {}
+        task.extra_metadata['celery_task_id'] = self.request.id
+        db.commit()
+        
         # 输出任务概览
         reporter.log("INFO", "=" * 80)
         reporter.log("INFO", f"🎯 开始执行评测任务")
@@ -532,6 +538,29 @@ def run_real_evaluation_task(self, task_id: int):
         else:
             work_dir = Path(task.work_dir)
             work_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 检查任务恢复状态 - 使用EvalScope的use_cache功能实现断点续评
+        is_resumed = False
+        if work_dir.exists():
+            # 检查是否有部分完成的评测结果（在数据集子目录中）
+            has_predictions = False
+            for dataset_name in task.datasets:
+                dataset_dir = work_dir / dataset_name
+                if dataset_dir.exists():
+                    # 查找最新的时间戳目录
+                    timestamp_dirs = [d for d in dataset_dir.iterdir() if d.is_dir() and d.name.startswith('2025')]
+                    if timestamp_dirs:
+                        latest_dir = max(timestamp_dirs, key=lambda x: x.name)
+                        predictions_dir = latest_dir / 'predictions'
+                        if predictions_dir.exists() and any(predictions_dir.iterdir()):
+                            has_predictions = True
+                            break
+            
+            if has_predictions:
+                is_resumed = True
+                reporter.log("INFO", f"🔄 检测到任务恢复，将使用EvalScope断点续评功能继续执行")
+                reporter.log("INFO", f"📁 工作目录: {work_dir}")
+                reporter.log("INFO", f"📊 发现已有评测结果，将从断点继续")
         
         # 启动进度监控
         reporter.start_progress_monitoring(work_dir)
@@ -595,22 +624,46 @@ def run_real_evaluation_task(self, task_id: int):
             all_results = []
             
             for idx, dataset_name in enumerate(task.datasets):
+                # 检查任务是否被取消
+                if getattr(self.request, 'cancelled', False):
+                    reporter.log("WARNING", f"⚠️ 任务已被取消，停止执行")
+                    return {"status": "cancelled", "message": "任务已被取消"}
+                
                 reporter.log("INFO", f"")
                 reporter.log("INFO", f"▶️  [{idx+1}/{len(task.datasets)}] 评测数据集: {dataset_name}")
                 reporter.update_dataset_progress(dataset_name, status='running', current_step='准备')
+                
+                # 确定数据集工作目录
+                dataset_work_dir = work_dir / dataset_name if len(task.datasets) > 1 else work_dir
+                
+                # 如果是恢复的任务，查找缓存目录
+                cache_dir = None
+                if is_resumed:
+                    if dataset_work_dir.exists():
+                        timestamp_dirs = [d for d in dataset_work_dir.iterdir() if d.is_dir() and d.name.startswith('2025')]
+                        if timestamp_dirs:
+                            cache_dir = max(timestamp_dirs, key=lambda x: x.name)
                 
                 # 构建TaskConfig参数
                 config_params = EvalScopeAPIAdapter.build_task_config_params(
                     model_name=model_name,
                     datasets=[dataset_name],
                     eval_type=eval_type,
-                    work_dir=str(work_dir / dataset_name if len(task.datasets) > 1 else work_dir),
+                    work_dir=str(dataset_work_dir),
                     api_config=api_config,
                     model_args=task.model_args,
                     generation_config=task.generation_config,
                     dataset_args=task.dataset_args,
-                    limit=task.dataset_args.get(dataset_name, {}).get('limit') if task.dataset_args else None
+                    limit=task.dataset_args.get(dataset_name, {}).get('limit') if task.dataset_args else None,
+                    use_cache=str(cache_dir) if is_resumed and cache_dir else None  # 恢复时使用缓存
                 )
+                
+                # 如果是恢复的任务，记录日志
+                if is_resumed:
+                    if cache_dir:
+                        reporter.log("INFO", f"🔄 [{dataset_name}] 优化版任务使用缓存继续执行: {cache_dir}")
+                    else:
+                        reporter.log("WARNING", f"⚠️ [{dataset_name}] 未找到缓存目录，将重新开始")
                 
                 # 输出配置（隐藏敏感信息）
                 config_debug = {k: ('***' if k == 'api_key' else v) for k, v in config_params.items()}
@@ -622,8 +675,18 @@ def run_real_evaluation_task(self, task_id: int):
                 eval_config = TaskConfig(**config_params)
                 reporter.log("INFO", f"🚀 开始评测...")
                 
+                # 执行评测前再次检查取消状态
+                if getattr(self.request, 'cancelled', False):
+                    reporter.log("WARNING", f"⚠️ 任务已被取消，跳过数据集 {dataset_name}")
+                    continue
+                
                 # 执行评测
                 result = run_task(eval_config)
+                
+                # 评测完成后检查取消状态
+                if getattr(self.request, 'cancelled', False):
+                    reporter.log("WARNING", f"⚠️ 任务已被取消，停止处理结果")
+                    return {"status": "cancelled", "message": "任务已被取消"}
                 
                 # 解析结果
                 parsed_results = ResultParser.parse_evalscope_result(result, dataset_name)

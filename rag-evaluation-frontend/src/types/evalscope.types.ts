@@ -36,7 +36,7 @@ export interface EvalTaskDetail extends EvalTask {
   results?: EvalResult[];
 }
 
-export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'paused';
 
 export interface ModelConfig {
   type: string;

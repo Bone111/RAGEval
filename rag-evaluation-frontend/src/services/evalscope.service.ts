@@ -73,6 +73,42 @@ export const evalscopeService = {
   },
 
   /**
+   * 暂停任务
+   */
+  async pauseTask(taskId: number): Promise<void> {
+    await axiosInstance.post(`${API_BASE}/tasks/${taskId}/pause`);
+  },
+
+  /**
+   * 恢复任务
+   */
+  async resumeTask(taskId: number): Promise<void> {
+    await axiosInstance.post(`${API_BASE}/tasks/${taskId}/resume`);
+  },
+
+  /**
+   * 重新评测任务 - 覆盖原文件夹重新开始
+   */
+  async restartTask(taskId: number): Promise<void> {
+    await axiosInstance.post(`${API_BASE}/tasks/${taskId}/restart`);
+  },
+
+  /**
+   * 继续评测任务 - 在已有结果基础上继续
+   */
+  async continueTask(taskId: number): Promise<void> {
+    await axiosInstance.post(`${API_BASE}/tasks/${taskId}/continue`);
+  },
+
+  /**
+   * 检查任务是否有评测结果目录
+   */
+  async checkTaskResults(taskId: number): Promise<boolean> {
+    const response = await axiosInstance.get(`${API_BASE}/tasks/${taskId}/check-results`);
+    return response.data.has_results;
+  },
+
+  /**
    * 验证任务中的模型是否仍然存在
    */
   async validateTaskModel(taskId: number): Promise<{

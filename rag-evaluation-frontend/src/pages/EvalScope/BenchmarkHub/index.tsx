@@ -63,6 +63,7 @@ interface BenchmarkInfo {
   file_size?: string;
   last_updated?: string;
   cache_path?: string;
+  num_subsets?: number;  // 子集数量
 }
 
 const BenchmarkHubPage: React.FC = () => {
@@ -78,6 +79,10 @@ const BenchmarkHubPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [downloadingBenchmarks, setDownloadingBenchmarks] = useState<Set<string>>(new Set());
+  const [subsetsData, setSubsetsData] = useState<any>(null);
+  const [loadingSubsets, setLoadingSubsets] = useState(false);
+  const [subsetSearchQuery, setSubsetSearchQuery] = useState('');
+  const [selectedSubsetCategory, setSelectedSubsetCategory] = useState<string>('all');
 
   // API 调用函数
   const fetchBenchmarks = async (category?: string, language?: string) => {
@@ -258,6 +263,7 @@ const BenchmarkHubPage: React.FC = () => {
     fetchBenchmarks(selectedCategory);
   }, [selectedCategory]);
 
+
   // 处理分类变化
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category);
@@ -376,6 +382,42 @@ const BenchmarkHubPage: React.FC = () => {
       handleStartEval(benchmark);
     } else {
       downloadBenchmark(benchmark.name);
+    }
+  };
+
+  // 获取子集详情
+  const fetchSubsets = async (benchmarkName: string) => {
+    setLoadingSubsets(true);
+    try {
+      const response = await fetch(`/api/v1/evalscope/benchmarks/${benchmarkName}/subsets`);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`获取子集详情失败: ${response.status} ${errorText}`);
+      }
+      
+      const data = await response.json();
+      setSubsetsData(data);
+    } catch (error) {
+      console.error('获取子集详情失败:', error);
+      message.error(`获取子集详情失败: ${error.message}`);
+    } finally {
+      setLoadingSubsets(false);
+    }
+  };
+
+  // 处理详情Modal打开
+  const handleModalOpen = (benchmark: BenchmarkInfo) => {
+    setSelectedBenchmark(benchmark);
+    setModalVisible(true);
+    // 重置子集筛选状态
+    setSubsetSearchQuery('');
+    setSelectedSubsetCategory('all');
+    // 如果有子集，获取子集详情
+    if (benchmark.num_subsets && benchmark.num_subsets > 1) {
+      fetchSubsets(benchmark.name);
+    } else {
+      setSubsetsData(null);
     }
   };
 
@@ -555,10 +597,7 @@ const BenchmarkHubPage: React.FC = () => {
                 <Button 
                   type="text" 
                   icon={<EyeOutlined />}
-                  onClick={() => {
-                    setSelectedBenchmark(benchmark);
-                    setModalVisible(true);
-                  }}
+                  onClick={() => handleModalOpen(benchmark)}
                 >
                   详情
                 </Button>,
@@ -650,6 +689,9 @@ const BenchmarkHubPage: React.FC = () => {
                     <Tag>{benchmark.category}</Tag>
                     <Tag>{benchmark.language}</Tag>
                   <Tag>{benchmark.num_samples} 样本</Tag>
+                  {benchmark.num_subsets && benchmark.num_subsets > 1 && (
+                    <Tag color="purple">{benchmark.num_subsets} 子集</Tag>
+                  )}
                   {isHot && <Tag color="red" icon={<FireOutlined />}>热门</Tag>}
                 </Space>
               </div>
@@ -687,10 +729,7 @@ const BenchmarkHubPage: React.FC = () => {
                   <Button 
                     type="text" 
                     icon={<EyeOutlined />}
-                    onClick={() => {
-                      setSelectedBenchmark(benchmark);
-                      setModalVisible(true);
-                    }}
+                    onClick={() => handleModalOpen(benchmark)}
                   >
                     详情
                   </Button>,
@@ -729,6 +768,9 @@ const BenchmarkHubPage: React.FC = () => {
                       <Space wrap>
                         <Tag>{benchmark.category}</Tag>
                         <Tag>{benchmark.language}</Tag>
+                        {benchmark.num_subsets && benchmark.num_subsets > 1 && (
+                          <Tag color="purple">{benchmark.num_subsets} 子集</Tag>
+                        )}
                         {isHot && <Tag color="red" icon={<FireOutlined />}>热门</Tag>}
                       </Space>
                       <Text type="secondary">{benchmark.num_samples} 样本</Text>
@@ -790,7 +832,7 @@ const BenchmarkHubPage: React.FC = () => {
               {selectedBenchmark?.cached ? '开始评测' : '下载'}
           </Button>
         ]}
-        width={800}
+        width={1000}
       >
         {selectedBenchmark && (
           <div>
@@ -813,6 +855,11 @@ const BenchmarkHubPage: React.FC = () => {
               <Descriptions.Item label="样本数量">
                 {selectedBenchmark.num_samples.toLocaleString()}
               </Descriptions.Item>
+              {selectedBenchmark.num_subsets && selectedBenchmark.num_subsets > 1 && (
+                <Descriptions.Item label="子集数量">
+                  {selectedBenchmark.num_subsets} 个子集
+                </Descriptions.Item>
+              )}
                 {selectedBenchmark.file_size && (
                   <Descriptions.Item label="文件大小" span={2}>
                     {selectedBenchmark.file_size}
@@ -838,6 +885,139 @@ const BenchmarkHubPage: React.FC = () => {
               <Title level={4}>描述</Title>
               <Paragraph>{selectedBenchmark.description}</Paragraph>
             </div>
+
+            {/* 子集详情 */}
+            {selectedBenchmark.num_subsets && selectedBenchmark.num_subsets > 1 && (
+              <div style={{ marginTop: 16 }}>
+                <Title level={4}>子集详情</Title>
+                <Spin spinning={loadingSubsets}>
+                  {subsetsData ? (
+                    <div>
+                      <div style={{ marginBottom: 16 }}>
+                        <Text type="secondary">
+                          共 {subsetsData.total_subsets} 个子集，涵盖多个学科领域
+                        </Text>
+                      </div>
+                      
+                      {/* 筛选控件 */}
+                      <div style={{ marginBottom: 16 }}>
+                        <Row gutter={16} align="middle">
+                          <Col span={12}>
+                            <Search
+                              placeholder="搜索子集名称或描述"
+                              value={subsetSearchQuery}
+                              onChange={e => setSubsetSearchQuery(e.target.value)}
+                              prefix={<SearchOutlined />}
+                              allowClear
+                            />
+                          </Col>
+                          <Col span={8}>
+                            <Select
+                              value={selectedSubsetCategory}
+                              onChange={setSelectedSubsetCategory}
+                              style={{ width: '100%' }}
+                              placeholder="选择类别"
+                            >
+                              <Option value="all">所有类别</Option>
+                              {(() => {
+                                const categories = Array.from(new Set(subsetsData.subsets.map((s: any) => s.category)));
+                                return categories.map((cat: string) => (
+                                  <Option key={cat} value={cat}>{cat}</Option>
+                                ));
+                              })()}
+                            </Select>
+                          </Col>
+                          <Col span={4}>
+                            <Text type="secondary">
+                              显示 {(() => {
+                                const filtered = subsetsData.subsets.filter((subset: any) => {
+                                  const matchesSearch = subsetSearchQuery === '' || 
+                                    subset.name.toLowerCase().includes(subsetSearchQuery.toLowerCase()) ||
+                                    subset.description.toLowerCase().includes(subsetSearchQuery.toLowerCase());
+                                  const matchesCategory = selectedSubsetCategory === 'all' || 
+                                    subset.category === selectedSubsetCategory;
+                                  return matchesSearch && matchesCategory;
+                                });
+                                return filtered.length;
+                              })()} 个子集
+                            </Text>
+                          </Col>
+                        </Row>
+                      </div>
+                      
+                      {/* 筛选后的子集列表 */}
+                      <div style={{ 
+                        maxHeight: '400px', 
+                        overflowY: 'auto', 
+                        border: '1px solid #f0f0f0', 
+                        borderRadius: '6px',
+                        padding: '16px'
+                      }}>
+                        {(() => {
+                          const filteredSubsets = subsetsData.subsets.filter((subset: any) => {
+                            const matchesSearch = subsetSearchQuery === '' || 
+                              subset.name.toLowerCase().includes(subsetSearchQuery.toLowerCase()) ||
+                              subset.description.toLowerCase().includes(subsetSearchQuery.toLowerCase());
+                            const matchesCategory = selectedSubsetCategory === 'all' || 
+                              subset.category === selectedSubsetCategory;
+                            return matchesSearch && matchesCategory;
+                          });
+
+                          if (filteredSubsets.length === 0) {
+                            return (
+                              <div style={{ textAlign: 'center', padding: '40px' }}>
+                                <Text type="secondary">没有找到匹配的子集</Text>
+                              </div>
+                            );
+                          }
+
+                          // 按类别分组
+                          const groupedSubsets = filteredSubsets.reduce((acc: any, subset: any) => {
+                            if (!acc[subset.category]) {
+                              acc[subset.category] = [];
+                            }
+                            acc[subset.category].push(subset);
+                            return acc;
+                          }, {});
+
+                          return Object.entries(groupedSubsets).map(([category, subsets]: [string, any]) => (
+                            <div key={category} style={{ marginBottom: 20 }}>
+                              <Title level={5} style={{ color: '#1890ff', marginBottom: 12 }}>
+                                {category} ({subsets.length} 个子集)
+                              </Title>
+                              <Row gutter={[8, 8]}>
+                                {subsets.map((subset: any) => (
+                                  <Col span={8} key={subset.id}>
+                                    <Card 
+                                      size="small" 
+                                      hoverable
+                                      style={{ height: '100%' }}
+                                      title={
+                                        <div style={{ fontSize: '12px', fontWeight: 'bold' }}>
+                                          {subset.name}
+                                        </div>
+                                      }
+                                    >
+                                      <div style={{ fontSize: '11px', color: '#666' }}>
+                                        {subset.description}
+                                      </div>
+                                    </Card>
+                                  </Col>
+                                ))}
+                              </Row>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '20px' }}>
+                      <Text type="secondary">正在加载子集详情...</Text>
+                    </div>
+                  )}
+                </Spin>
+              </div>
+            )}
 
               {selectedBenchmark.cache_status === 'downloading' && (
               <div style={{ marginTop: 16 }}>

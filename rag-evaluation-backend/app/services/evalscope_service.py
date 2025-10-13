@@ -371,6 +371,9 @@ class EvalScopeService:
         user_id: Optional[int] = None
     ) -> bool:
         """取消任务"""
+        import logging
+        logger = logging.getLogger(__name__)
+        
         task = await EvalScopeService.get_task(db, task_id, user_id)
         
         if not task:
@@ -379,10 +382,34 @@ class EvalScopeService:
         if task.status not in ['pending', 'running']:
             return False
         
+        # 更新任务状态
         task.status = 'cancelled'
+        task.completed_at = datetime.now()
         db.commit()
         
-        # TODO: 发送Celery取消信号
+        # 发送Celery取消信号
+        try:
+            from celery import current_app
+            
+            # 查找Celery任务ID
+            celery_task_id = None
+            if hasattr(task, 'celery_task_id') and task.celery_task_id:
+                celery_task_id = task.celery_task_id
+            else:
+                # 尝试从extra_metadata中获取
+                if task.extra_metadata and 'celery_task_id' in task.extra_metadata:
+                    celery_task_id = task.extra_metadata['celery_task_id']
+            
+            if celery_task_id:
+                # 发送取消信号
+                current_app.control.revoke(celery_task_id, terminate=True)
+                logger.info(f"已发送Celery取消信号: {celery_task_id}")
+            else:
+                logger.warning(f"任务 {task_id} 未找到Celery任务ID，无法发送取消信号")
+                
+        except Exception as e:
+            logger.error(f"发送Celery取消信号失败: {e}")
+            # 即使Celery取消失败，数据库状态已更新，任务仍会被标记为取消
         
         return True
 

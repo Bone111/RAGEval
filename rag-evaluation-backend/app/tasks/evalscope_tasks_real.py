@@ -2,6 +2,7 @@
 EvalScope真实评测异步任务 - 调用命令行工具
 """
 import os
+import sys
 import subprocess
 import json
 import time
@@ -11,6 +12,7 @@ from pathlib import Path
 
 # 导入性能配置
 from app.core.config import settings
+from app.core.process_manager import ProcessManager
 
 # Celery配置
 try:
@@ -20,6 +22,18 @@ try:
     # 目的：确保Celery配置完整，避免使用默认值导致的隐藏问题
     # 问题定位：如果这里抛出ValueError，说明环境变量未正确配置
     # 解决方案：在启动脚本或.env文件中设置 CELERY_BROKER_URL 和 CELERY_RESULT_BACKEND
+    
+    # 尝试从配置文件加载环境变量
+    config_file = "performance_config_optimized.env"
+    if os.path.exists(config_file):
+        with open(config_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    if key.startswith('CELERY_'):
+                        os.environ[key] = value
+    
     broker_url = os.getenv("CELERY_BROKER_URL")
     backend_url = os.getenv("CELERY_RESULT_BACKEND")
     
@@ -529,6 +543,12 @@ def run_real_evaluation_task(self, task_id: int):
     """执行真实的EvalScope评测任务"""
     from app.models.evalscope_task import EvalScopeTask, EvalScopeResult
     
+    # 添加任务取消检查支持
+    def check_is_aborted():
+        """检查任务是否被取消"""
+        # Celery 5.x 使用 request.cancelled 属性
+        return getattr(self.request, 'cancelled', False)
+    
     db = get_db_session()
     reporter = ProgressReporter(db, task_id)
     
@@ -563,6 +583,10 @@ def run_real_evaluation_task(self, task_id: int):
         # 2. 更新状态为运行中
         task.status = 'running'
         task.started_at = datetime.now()
+        task.celery_task_id = self.request.id  # 更新Celery任务ID
+        if not task.extra_metadata:
+            task.extra_metadata = {}
+        task.extra_metadata['celery_task_id'] = self.request.id
         db.commit()
         
         # 初始化数据集进度追踪
@@ -579,6 +603,29 @@ def run_real_evaluation_task(self, task_id: int):
         else:
             work_dir = Path(task.work_dir)
             work_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 检查任务恢复状态 - 使用EvalScope的use_cache功能实现断点续评
+        is_resumed = False
+        if work_dir.exists():
+            # 检查是否有部分完成的评测结果（在数据集子目录中）
+            has_predictions = False
+            for dataset_name in task.datasets:
+                dataset_dir = work_dir / dataset_name
+                if dataset_dir.exists():
+                    # 查找最新的时间戳目录
+                    timestamp_dirs = [d for d in dataset_dir.iterdir() if d.is_dir() and d.name.startswith('2025')]
+                    if timestamp_dirs:
+                        latest_dir = max(timestamp_dirs, key=lambda x: x.name)
+                        predictions_dir = latest_dir / 'predictions'
+                        if predictions_dir.exists() and any(predictions_dir.iterdir()):
+                            has_predictions = True
+                            break
+            
+            if has_predictions:
+                is_resumed = True
+                reporter.log("INFO", f"🔄 检测到任务恢复，将使用EvalScope断点续评功能继续执行")
+                reporter.log("INFO", f"📁 工作目录: {work_dir}")
+                reporter.log("INFO", f"📊 发现已有评测结果，将从断点继续")
         
         reporter.update_progress(10, "准备工作环境")
         
@@ -624,9 +671,9 @@ def run_real_evaluation_task(self, task_id: int):
                 reporter.log("ERROR", error_msg)
                 raise Exception(error_msg)
         
-        # 使用正确的Python环境（evalscope环境）
-        # 从环境变量获取Python路径，如果未设置则使用当前Python
-        conda_python = os.getenv('EVALSCOPE_PYTHON_PATH', 'python')
+        # 使用当前环境的Python（通过conda环境自动设置）
+        # 优先使用环境变量，否则使用当前Python解释器
+        conda_python = os.getenv('EVALSCOPE_PYTHON_PATH', sys.executable)
         
         # 检查是否支持并行处理（多个数据集）
         if len(task.datasets) > 1:
@@ -831,12 +878,30 @@ def run_real_evaluation_task(self, task_id: int):
                     reporter.update_dataset_progress(dataset_name, 0, 'running', '开始评测')
                     reporter.log("INFO", f"开始评测数据集: {dataset_name}")
                 
+                    # 确定数据集工作目录
+                    dataset_work_dir = work_dir / f'dataset_{dataset_name}' if len(task.datasets) > 1 else work_dir
+                    
                     config_params = {
                         'model': model_id,
                         'datasets': [dataset_name],
                         'eval_type': actual_eval_type,
-                        'work_dir': str(work_dir / f'dataset_{dataset_name}' if len(task.datasets) > 1 else work_dir)
+                        'work_dir': str(dataset_work_dir)
                     }
+                    
+                    # 如果是恢复的任务，添加use_cache参数以继续执行
+                    if is_resumed:
+                        # 查找该数据集的最新时间戳目录
+                        cache_dir = None
+                        if dataset_work_dir.exists():
+                            timestamp_dirs = [d for d in dataset_work_dir.iterdir() if d.is_dir() and d.name.startswith('2025')]
+                            if timestamp_dirs:
+                                cache_dir = max(timestamp_dirs, key=lambda x: x.name)
+                        
+                        if cache_dir:
+                            config_params['use_cache'] = str(cache_dir)
+                            reporter.log("INFO", f"🔄 [{dataset_name}] Python API 使用缓存继续执行: {cache_dir}")
+                        else:
+                            reporter.log("WARNING", f"⚠️ [{dataset_name}] 未找到缓存目录，将重新开始")
                 
                     # 从dataset_args中获取该数据集的limit
                     total_samples = None
@@ -989,15 +1054,15 @@ def run_real_evaluation_task(self, task_id: int):
                 # Python API 成功，直接跳转到结果处理
                 python_api_success = True
             
-        except Exception as api_error:
-            reporter.log("WARNING", "")
-            reporter.log("WARNING", "⚠️  Python API执行失败，即将回退到命令行方式")
-            reporter.log("WARNING", f"💥 错误原因: {api_error}")
-            reporter.log("WARNING", f"🔄 回退策略: 使用命令行模式重新执行")
-            reporter.log("WARNING", "")
-            # 继续使用命令行方式
-            results = []
-            python_api_success = False
+            except Exception as api_error:
+                reporter.log("WARNING", "")
+                reporter.log("WARNING", "⚠️  Python API执行失败，即将回退到命令行方式")
+                reporter.log("WARNING", f"💥 错误原因: {api_error}")
+                reporter.log("WARNING", f"🔄 回退策略: 使用命令行模式重新执行")
+                reporter.log("WARNING", "")
+                # 继续使用命令行方式
+                results = []
+                python_api_success = False
         
         # 只有Python API失败时才使用命令行方式
         if not python_api_success:
@@ -1006,6 +1071,24 @@ def run_real_evaluation_task(self, task_id: int):
                 # 为每个数据集使用独立的工作目录
                 dataset_work_dir = work_dir / f'dataset_{dataset_name}' if len(task.datasets) > 1 else work_dir
                 cmd_args.extend(['--work-dir', str(dataset_work_dir)])
+                
+                # 如果是恢复的任务，添加use-cache参数以继续执行
+                if is_resumed:
+                    # 查找该数据集的最新时间戳目录
+                    cache_dir = None
+                    if dataset_work_dir.exists():
+                        timestamp_dirs = [d for d in dataset_work_dir.iterdir() if d.is_dir() and d.name.startswith('2025')]
+                        if timestamp_dirs:
+                            cache_dir = max(timestamp_dirs, key=lambda x: x.name)
+                    
+                    if cache_dir:
+                        cmd_args.extend(['--use-cache', str(cache_dir)])
+                        reporter.log("INFO", f"🔄 [{dataset_name}] 命令行使用缓存继续执行: {cache_dir}")
+                    else:
+                        reporter.log("WARNING", f"⚠️ [{dataset_name}] 未找到缓存目录，将重新开始")
+                
+                # 添加eval_type参数（关键：告诉EvalScope使用哪种评测方式）
+                cmd_args.extend(['--eval-type', actual_eval_type])
                 
                 # 为API模型添加认证参数
                 if actual_eval_type == 'openai_api':
@@ -1082,6 +1165,14 @@ def run_real_evaluation_task(self, task_id: int):
                     universal_newlines=True,
                     env=env
                 )
+                
+                # 保存进程信息到进程管理器
+                try:
+                    process_manager = ProcessManager(task_id)
+                    process_manager.save_process_info(dataset_name, process.pid, cmd_args)
+                    reporter.log("INFO", f"💾 保存进程信息: {dataset_name} -> PID {process.pid}")
+                except Exception as e:
+                    reporter.log("WARNING", f"保存进程信息失败: {e}")
                 
                 stdout_lines = []
                 stderr_lines = []
@@ -1166,6 +1257,15 @@ def run_real_evaluation_task(self, task_id: int):
                 universal_newlines=True,
                 env=env
             )
+            
+            # 保存进程信息到进程管理器
+            try:
+                process_manager = ProcessManager(task_id)
+                dataset_name = task.datasets[0] if task.datasets else "single_dataset"
+                process_manager.save_process_info(dataset_name, process.pid, cmd_args)
+                reporter.log("INFO", f"💾 保存进程信息: {dataset_name} -> PID {process.pid}")
+            except Exception as e:
+                reporter.log("WARNING", f"保存进程信息失败: {e}")
             
             reporter.update_progress(20, "EvalScope已启动")
             

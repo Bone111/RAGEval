@@ -24,7 +24,9 @@ import {
   ReloadOutlined,
   StopOutlined,
   SwapOutlined,
-  RedoOutlined
+  RedoOutlined,
+  PauseCircleOutlined,
+  PlayCircleOutlined
 } from '@ant-design/icons';
 import type { EvalTask } from '../../../types/evalscope.types';
 import { evalscopeService } from '../../../services/evalscope.service';
@@ -295,6 +297,26 @@ const TaskListPage: React.FC = () => {
     }
   };
 
+  const handlePause = async (taskId: number) => {
+    try {
+      await evalscopeService.pauseTask(taskId);
+      message.success('任务已暂停');
+      loadTasks();
+    } catch (error) {
+      message.error('暂停失败');
+    }
+  };
+
+  const handleResume = async (taskId: number) => {
+    try {
+      await evalscopeService.resumeTask(taskId);
+      message.success('任务已恢复');
+      loadTasks();
+    } catch (error) {
+      message.error('恢复失败');
+    }
+  };
+
   // 生成智能的重试任务名称
   const generateRetryTaskName = (originalName: string): string => {
     // 检查是否已经包含重试信息（支持数字和纯文字两种格式）
@@ -350,46 +372,92 @@ const TaskListPage: React.FC = () => {
       return;
     }
     
-    const hide = message.loading('正在创建重新评测任务...', 0);
+    // 检查是否有评测结果目录
     try {
-      // 先获取完整的任务详情（包含 extra_metadata）
-      const taskDetail = await evalscopeService.getTask(task.id);
-      console.log('获取到完整任务详情:', taskDetail);
+      const hasResults = await evalscopeService.checkTaskResults(task.id);
       
-      // 使用原任务的配置重新创建任务
-      const newTask = await evalscopeService.createTask({
-        task_name: generateRetryTaskName(task.task_name),
-        model_id: taskDetail.model_id,
-        datasets: taskDetail.datasets,
-        model_args: taskDetail.model_args || {},
-        dataset_args: taskDetail.dataset_args || {},
-        generation_config: taskDetail.generation_config || {},
-        eval_backend: taskDetail.eval_backend,
-        eval_type: taskDetail.eval_type,
-        user_model_config: taskDetail.extra_metadata?.user_model_config
-      });
-      
-      hide();
-      console.log('新任务已创建:', newTask);
-      
-      // 检查任务状态
-      if (newTask.status === 'failed') {
-        message.error(`任务创建失败: ${newTask.error_message || '未知错误'}`);
-        return;
+      if (hasResults) {
+        // 有结果目录，显示选择弹框
+        Modal.confirm({
+          title: '选择评测方式',
+          content: (
+            <div>
+              <p>检测到此任务已有评测结果目录，请选择评测方式：</p>
+              <div style={{ 
+                background: '#f6f8fa', 
+                border: '1px solid #d0d7de',
+                borderRadius: '6px', 
+                padding: '16px',
+                margin: '12px 0'
+              }}>
+                <div style={{ marginBottom: '12px' }}>
+                  <strong style={{ color: '#0969da' }}>🔄 继续评测</strong>
+                  <p style={{ margin: '4px 0', fontSize: '13px', color: '#656d76' }}>
+                    在已有评测结果的基础上继续执行，保留已完成的数据，只评测未完成的部分
+                  </p>
+                </div>
+                <div>
+                  <strong style={{ color: '#cf222e' }}>🗑️ 重新评测</strong>
+                  <p style={{ margin: '4px 0', fontSize: '13px', color: '#656d76' }}>
+                    清理所有评测结果，从零开始重新执行完整评测
+                  </p>
+                </div>
+              </div>
+            </div>
+          ),
+          okText: '继续评测',
+          cancelText: '重新评测',
+          okType: 'primary',
+          onOk: async () => {
+            // 继续评测
+            await performRetry(task.id, 'continue');
+          },
+          onCancel: async () => {
+            // 重新评测
+            await performRetry(task.id, 'restart');
+          }
+        });
+      } else {
+        // 没有结果目录，直接重新评测
+        await performRetry(task.id, 'restart');
+      }
+    } catch (error: any) {
+      console.error('检查评测结果失败:', error);
+      // 如果检查失败，默认重新评测
+      await performRetry(task.id, 'restart');
+    }
+  };
+
+  // 执行重新评测的具体逻辑
+  const performRetry = async (taskId: number, mode: 'continue' | 'restart') => {
+    const hide = message.loading(
+      mode === 'continue' ? '正在继续评测任务...' : '正在重新评测任务...', 
+      0
+    );
+    
+    try {
+      if (mode === 'continue') {
+        // 继续评测
+        await evalscopeService.continueTask(taskId);
+        message.success(`任务 #${taskId} 已继续评测，将从断点继续执行...`);
+      } else {
+        // 重新评测
+        await evalscopeService.restartTask(taskId);
+        message.success(`任务 #${taskId} 已重新启动，正在执行评测...`);
       }
       
-      message.success(`任务 #${newTask.id} 已创建，正在执行评测...`);
+      hide();
       
       // 刷新列表
       await loadTasks();
       
-      // 导航到新任务详情页
-      navigate(`/evalscope/tasks/${newTask.id}`);
+      // 导航到任务详情页
+      navigate(`/evalscope/tasks/${taskId}`);
     } catch (error: any) {
       hide();
-      console.error('重新评测失败:', error);
+      console.error('评测失败:', error);
       const errorMsg = error.response?.data?.detail || error.message || '未知错误';
-      message.error(`重新评测失败: ${errorMsg}`);
+      message.error(`评测失败: ${errorMsg}`);
     }
   };
 
@@ -397,6 +465,7 @@ const TaskListPage: React.FC = () => {
     const statusMap: Record<string, { color: string; text: string }> = {
       pending: { color: 'default', text: '等待中' },
       running: { color: 'processing', text: '运行中' },
+      paused: { color: 'warning', text: '已暂停' },
       completed: { color: 'success', text: '已完成' },
       failed: { color: 'error', text: '失败' },
       cancelled: { color: 'warning', text: '已取消' }
@@ -533,8 +602,34 @@ const TaskListPage: React.FC = () => {
           >
             查看
           </Button>
-          {/* 取消按钮：运行中和等待中的任务都可以取消 */}
-          {(['running', 'pending'].includes(record.status)) && (
+          {/* 暂停按钮：运行中的任务可以暂停 */}
+          {record.status === 'running' && (
+            <Button
+              type="link"
+              size="small"
+              icon={<PauseCircleOutlined />}
+              onClick={() => handlePause(record.id)}
+              style={{ padding: '4px 6px' }}
+            >
+              暂停
+            </Button>
+          )}
+          
+          {/* 恢复按钮：暂停的任务可以恢复 */}
+          {record.status === 'paused' && (
+            <Button
+              type="link"
+              size="small"
+              icon={<PlayCircleOutlined />}
+              onClick={() => handleResume(record.id)}
+              style={{ padding: '4px 6px' }}
+            >
+              恢复
+            </Button>
+          )}
+          
+          {/* 取消按钮：运行中、暂停中和等待中的任务都可以取消 */}
+          {(['running', 'paused', 'pending'].includes(record.status)) && (
             <Button
               type="link"
               size="small"
@@ -579,7 +674,7 @@ const TaskListPage: React.FC = () => {
           )}
           
           {/* 删除按钮：非运行中的任务都可以删除 */}
-          {(['completed', 'failed', 'cancelled', 'pending'].includes(record.status)) && (
+          {(['completed', 'failed', 'cancelled', 'pending', 'paused'].includes(record.status)) && (
             <Tooltip title="删除任务及其相关数据">
               <Button
                 type="link"
@@ -714,6 +809,7 @@ const TaskListPage: React.FC = () => {
             options={[
               { value: 'pending', label: '等待中' },
               { value: 'running', label: '运行中' },
+              { value: 'paused', label: '已暂停' },
               { value: 'completed', label: '已完成' },
               { value: 'failed', label: '失败' },
               { value: 'cancelled', label: '已取消' }
@@ -735,7 +831,7 @@ const TaskListPage: React.FC = () => {
             },
             getCheckboxProps: (record) => ({
               // 只允许选择可删除的任务（非运行中的任务）
-              disabled: !['completed', 'failed', 'cancelled', 'pending'].includes(record.status),
+              disabled: !['completed', 'failed', 'cancelled', 'pending', 'paused'].includes(record.status),
             }),
           }}
           pagination={{

@@ -97,6 +97,7 @@ class BenchmarkInfo(BaseModel):
     file_size: Optional[str] = None
     last_updated: Optional[str] = None
     cache_path: Optional[str] = None
+    num_subsets: Optional[int] = None  # 子集数量
 
 
 class BenchmarkListResponse(BaseModel):

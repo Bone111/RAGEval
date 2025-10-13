@@ -26,13 +26,14 @@ import {
   PauseCircleOutlined,
   ArrowLeftOutlined,
   ReloadOutlined,
-  BarChartOutlined
+  BarChartOutlined,
+  PlayCircleOutlined
 } from '@ant-design/icons';
 import { formatRunningTime } from '../../../utils/timeFormat';
 import type { EvalTaskDetail, WebSocketMessage } from '@/types/evalscope.types';
 import { evalscopeService } from '@/services/evalscope.service';
 import { useEvalTaskWebSocket } from '@/hooks/useEvalTaskWebSocket';
-import { useSharedTaskPolling } from '@/hooks/useSharedTaskPolling';
+import { useSharedTaskPolling, SharedTaskPollingManager } from '@/hooks/useSharedTaskPolling';
 import DetailedProgressComponent from '../../../components/DetailedProgress';
 
 const TaskMonitorPage: React.FC = () => {
@@ -50,13 +51,54 @@ const TaskMonitorPage: React.FC = () => {
     enabled: true,
     onTaskUpdate: (updatedTask) => {
       setTask(updatedTask as EvalTaskDetail);
+      
+      // 同时更新数据集进度
+      if (updatedTask.status === 'running' || updatedTask.status === 'completed') {
+        updateDatasetProgress();
+      }
     }
   });
 
   // 初始加载任务
   useEffect(() => {
+    // 切换任务时先清空状态，避免显示上次的错误信息
+    setTask(null);
+    setLogs([]);
+    setDatasetProgress(null);
+    setLoading(true);
+    
     loadTask();
   }, [taskId]);
+
+  // 清理缓存的副作用 - 在订阅建立后清理旧缓存
+  useEffect(() => {
+    const manager = SharedTaskPollingManager.getInstance();
+    manager.clearTaskCache(taskId);
+    
+    // 强制刷新任务数据，确保获取最新状态
+    setTimeout(() => {
+      refreshTask();
+    }, 100);
+  }, [taskId, refreshTask]);
+
+  // 数据集进度轮询 - 仅在任务运行时启用
+  useEffect(() => {
+    if (!task || (task.status !== 'running' && task.status !== 'completed')) {
+      return;
+    }
+
+    // 立即获取一次数据集进度
+    updateDatasetProgress();
+
+    // 设置轮询间隔
+    const interval = setInterval(() => {
+      updateDatasetProgress();
+    }, 2000); // 每2秒更新一次数据集进度
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [task?.status, taskId]);
 
   // 根据任务状态生成日志
   useEffect(() => {
@@ -116,19 +158,24 @@ const TaskMonitorPage: React.FC = () => {
     setLogs(baseLogs);
   }, [task]);
 
+  // 更新数据集进度的函数
+  const updateDatasetProgress = async () => {
+    try {
+      const progressData = await evalscopeService.getTaskDatasetProgress(taskId);
+      setDatasetProgress(progressData);
+    } catch (progressErr) {
+      console.warn('获取数据集进度失败:', progressErr);
+      // 不影响主要功能，只记录警告
+    }
+  };
+
   const loadTask = async () => {
     try {
       const data = await evalscopeService.getTask(taskId);
       setTask(data);
       
       // 获取数据集进度详情
-      try {
-        const progressData = await evalscopeService.getTaskDatasetProgress(taskId);
-        setDatasetProgress(progressData);
-      } catch (progressErr) {
-        console.warn('获取数据集进度失败:', progressErr);
-        // 不影响主要功能，只记录警告
-      }
+      await updateDatasetProgress();
       
       setLoading(false);
     } catch (error) {
@@ -140,6 +187,24 @@ const TaskMonitorPage: React.FC = () => {
     try {
       await evalscopeService.cancelTask(taskId);
       // 使用共享轮询的刷新方法
+      await refreshTask();
+    } catch (error) {
+      //
+    }
+  };
+
+  const handlePause = async () => {
+    try {
+      await evalscopeService.pauseTask(taskId);
+      await refreshTask();
+    } catch (error) {
+      //
+    }
+  };
+
+  const handleResume = async () => {
+    try {
+      await evalscopeService.resumeTask(taskId);
       await refreshTask();
     } catch (error) {
       //
@@ -172,6 +237,7 @@ const TaskMonitorPage: React.FC = () => {
     const statusMap: Record<string, { color: string; icon: any }> = {
       pending: { color: 'default', icon: <ClockCircleOutlined /> },
       running: { color: 'processing', icon: <RocketOutlined /> },
+      paused: { color: 'warning', icon: <PauseCircleOutlined /> },
       completed: { color: 'success', icon: <CheckCircleOutlined /> },
       failed: { color: 'error', icon: <CloseCircleOutlined /> },
       cancelled: { color: 'warning', icon: <PauseCircleOutlined /> }
@@ -196,9 +262,24 @@ const TaskMonitorPage: React.FC = () => {
             刷新
           </Button>
           {task.status === 'running' && (
-            <Button danger onClick={handleCancel}>
-              取消任务
-            </Button>
+            <>
+              <Button icon={<PauseCircleOutlined />} onClick={handlePause}>
+                暂停任务
+              </Button>
+              <Button danger onClick={handleCancel}>
+                取消任务
+              </Button>
+            </>
+          )}
+          {task.status === 'paused' && (
+            <>
+              <Button icon={<PlayCircleOutlined />} onClick={handleResume}>
+                恢复任务
+              </Button>
+              <Button danger onClick={handleCancel}>
+                取消任务
+              </Button>
+            </>
           )}
           <Tag color="blue">真实评测模式</Tag>
         </Space>
