@@ -101,6 +101,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       onClick: () => navigate('/datasets')
     },
     {
+      key: '/evalscope/benchmarks',
+      icon: <FireOutlined />,
+      label: 'Benchmark Hub',
+      onClick: () => navigate('/evalscope/benchmarks')
+    },
+    {
       key: '/models',
       icon: <RobotOutlined />,
       label: '大模型管理',
@@ -122,12 +128,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
           icon: <PictureOutlined />,
           label: 'VLM多模态评测',
           onClick: () => navigate('/evalscope/vlm')
-        },
-        {
-          key: '/evalscope/benchmarks',
-          icon: <FireOutlined />,
-          label: '基准测试中心',
-          onClick: () => navigate('/evalscope/benchmarks')
         },
         {
           key: '/evalscope/compare',
@@ -203,6 +203,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
               mode="horizontal"
               selectedKeys={[
                 currentPath.startsWith('/datasets') ? '/datasets' :
+                currentPath.startsWith('/evalscope/benchmarks') ? '/evalscope/benchmarks' :
                 currentPath.startsWith('/models') ? '/models' :
                 currentPath.startsWith('/evalscope') ? '/evalscope' :
                 currentPath.startsWith('/admin/users') ? '/admin/users' :

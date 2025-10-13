@@ -280,5 +280,16 @@ export function createTaskWebSocket(taskId: number): WebSocket {
   return new WebSocket(wsUrl);
 }
 
+/**
+ * 获取任务的JSON报告
+ */
+async function getTaskJsonReports(taskId: number): Promise<any[]> {
+  const response = await axiosInstance.get(`${API_BASE}/tasks/${taskId}/json-reports`);
+  return response.data;
+}
+
+// 将新方法添加到服务对象
+evalscopeService.getTaskJsonReports = getTaskJsonReports;
+
 export default evalscopeService;
 

@@ -6,6 +6,9 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime, timedelta
 import asyncio
+import json
+import os
+from pathlib import Path
 
 from app.api import deps
 from app.schemas import evalscope as schemas
@@ -1497,6 +1500,42 @@ async def translate_text(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"翻译失败: {str(e)}")
+
+
+@router.get("/tasks/{task_id}/json-reports")
+async def get_task_json_reports(
+    task_id: int,
+    db: Session = Depends(deps.get_db)
+):
+    """获取任务的JSON报告文件"""
+    try:
+        # 查找任务对应的输出目录
+        outputs_dir = Path("outputs")
+        task_dir = outputs_dir / f"evalscope_task_{task_id}"
+        
+        if not task_dir.exists():
+            raise HTTPException(status_code=404, detail="任务输出目录不存在")
+        
+        # 查找所有JSON报告文件
+        json_reports = []
+        for report_file in task_dir.glob("**/reports/**/*.json"):
+            try:
+                with open(report_file, 'r', encoding='utf-8') as f:
+                    report_data = json.load(f)
+                json_reports.append(report_data)
+            except Exception as e:
+                print(f"读取报告文件失败: {report_file}, 错误: {e}")
+                continue
+        
+        if not json_reports:
+            raise HTTPException(status_code=404, detail="未找到JSON报告文件")
+        
+        return json_reports
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取JSON报告失败: {str(e)}")
 
 
 # 导出ws_manager供其他模块使用

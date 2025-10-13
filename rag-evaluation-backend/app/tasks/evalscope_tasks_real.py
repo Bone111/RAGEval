@@ -495,11 +495,18 @@ def parse_evalscope_output(stdout_lines: List[str], task_id: int = None) -> List
                                                     subset_score = subset['score']
                                                     subset_samples = subset['num']
                                                     
+                                                    # 处理category.name可能是数组的情况
+                                                    category_name = category.get('name', ['default'])
+                                                    if isinstance(category_name, list) and len(category_name) > 0:
+                                                        category_name = category_name[0]
+                                                    elif not isinstance(category_name, str):
+                                                        category_name = 'default'
+                                                    
                                                     results.append({
                                                         'benchmark': report_data.get('dataset_name', 'unknown'),
                                                         'metric_name': metric.get('name', 'accuracy'),
                                                         'metric_value': subset_score,  # 保持0-1范围
-                                                        'category': category.get('name', 'default'),
+                                                        'category': category_name,
                                                         'subset_name': subset['name'],  # 单独的子集名称
                                                         'num_samples': subset_samples
                                                     })
@@ -524,7 +531,7 @@ def parse_evalscope_output(stdout_lines: List[str], task_id: int = None) -> List
                                                         'benchmark': report_data.get('dataset_name', 'unknown'),
                                                         'metric_name': metric.get('name', 'accuracy'),
                                                         'metric_value': avg_score,  # 保持0-1范围
-                                                        'category': category.get('name', 'default'),
+                                                        'category': category_name,
                                                         'subset_name': 'average',  # 标记为平均分
                                                         'num_samples': total_samples
                                                     })
@@ -540,6 +547,7 @@ def parse_evalscope_output(stdout_lines: List[str], task_id: int = None) -> List
                                             'subset_name': 'main',
                                             'num_samples': metric.get('num', 0)
                                         })
+                                        print(f"INFO: 添加主结果: {report_data.get('dataset_name', 'unknown')} - main - {score:.4f} ({metric.get('num', 0)}样本)")
                                 break
                 else:
                     print(f"WARNING: 工作目录不存在: {work_path}")
