@@ -19,8 +19,17 @@ from app.services.unified_model_service import UnifiedModelService
 from app.models.user import User
 from app.models.evalscope_task import EvalScopeResult, EvalScopeTask
 from app.tasks.task_monitor import check_stuck_tasks
+from pydantic import BaseModel
 
 router = APIRouter()
+
+# 翻译请求模型
+class TranslateRequest(BaseModel):
+    text: str
+    target_lang: str = "zh"
+
+class TranslateResponse(BaseModel):
+    translated_text: str
 
 # WebSocket连接管理器
 class ConnectionManager:
@@ -845,6 +854,71 @@ async def get_benchmark_status_endpoint(
     return status
 
 
+@router.get("/benchmarks/{benchmark_name}/subsets/{subset_name}/samples")
+async def get_subset_samples(
+    benchmark_name: str,
+    subset_name: str,
+    limit: int = 5
+):
+    """获取子集的题目样本"""
+    try:
+        from datasets import load_dataset
+        
+        # 数据集配置映射
+        dataset_mapping = {
+            'mmlu': 'cais/mmlu',
+            'cmmlu': 'cmmlu/cmmlu',
+            'ceval': 'ceval/ceval',
+            'gsm8k': 'gsm8k/gsm8k',
+            'competition_math': 'hendrycks/competition_math',
+            'arc': 'allenai/ai2_arc',
+            'hellaswag': 'Rowan/hellaswag',
+            'bbh': 'suzgun/bbh',
+            'drop': 'drop',
+            'race': 'ehovy/race',
+            'alpaca_eval': 'tatsu-lab/alpaca_eval',
+            'mmmu': 'mmmu/mmmu'
+        }
+        
+        if benchmark_name not in dataset_mapping:
+            raise HTTPException(status_code=404, detail=f"Benchmark '{benchmark_name}' 不支持样本查看")
+        
+        dataset_id = dataset_mapping[benchmark_name]
+        
+        # 加载数据集
+        if benchmark_name in ['mmlu', 'cmmlu', 'ceval', 'race']:
+            # 这些数据集有子集
+            dataset = load_dataset(dataset_id, subset_name, split='test')
+        else:
+            # 其他数据集没有子集或使用默认配置
+            dataset = load_dataset(dataset_id, split='test')
+        
+        # 获取样本
+        samples = []
+        for i in range(min(limit, len(dataset))):
+            sample = dataset[i]
+            samples.append({
+                'index': i,
+                'question': sample.get('question', sample.get('input', '')),
+                'choices': sample.get('choices', []),
+                'answer': sample.get('answer', sample.get('target', '')),
+                'subject': sample.get('subject', subset_name),
+                'raw_data': sample
+            })
+        
+        return {
+            'benchmark_name': benchmark_name,
+            'subset_name': subset_name,
+            'total_samples': len(dataset),
+            'returned_samples': len(samples),
+            'samples': samples
+        }
+        
+    except Exception as e:
+        logger.error(f"获取子集样本失败: {e}")
+        raise HTTPException(status_code=500, detail=f"获取子集样本失败: {str(e)}")
+
+
 @router.get("/benchmarks/{benchmark_name}/subsets")
 async def get_benchmark_subsets(
     benchmark_name: str
@@ -1016,6 +1090,44 @@ async def get_benchmark_subsets(
                 'teacher_qualification': {'name': '教师资格', 'description': '教师资格考试', 'category': '教育'},
                 'urban_and_rural_planner': {'name': '城乡规划师', 'description': '城乡规划知识', 'category': '规划'},
                 'veterinarian': {'name': '兽医', 'description': '兽医学知识', 'category': '医学'}
+            }
+        },
+        'race': {
+            'subsets': ['all', 'high', 'middle'],
+            'subset_details': {
+                'all': {'name': '全部', 'description': 'RACE完整阅读理解数据集', 'category': '阅读理解'},
+                'high': {'name': '高中', 'description': 'RACE高中阅读理解题目', 'category': '阅读理解'},
+                'middle': {'name': '初中', 'description': 'RACE初中阅读理解题目', 'category': '阅读理解'}
+            }
+        },
+        'hellaswag': {
+            'subsets': ['main'],
+            'subset_details': {
+                'main': {'name': '主要测试集', 'description': 'HellaSwag常识推理数据集', 'category': '常识推理'}
+            }
+        },
+        'bbh': {
+            'subsets': ['main'],
+            'subset_details': {
+                'main': {'name': '主要测试集', 'description': 'BBH困难推理基准测试', 'category': '困难推理'}
+            }
+        },
+        'drop': {
+            'subsets': ['main'],
+            'subset_details': {
+                'main': {'name': '主要测试集', 'description': 'DROP阅读理解数据集', 'category': '阅读理解'}
+            }
+        },
+        'alpaca_eval': {
+            'subsets': ['main'],
+            'subset_details': {
+                'main': {'name': '主要测试集', 'description': 'AlpacaEval对话评估数据集', 'category': '对话能力'}
+            }
+        },
+        'mmmu': {
+            'subsets': ['main'],
+            'subset_details': {
+                'main': {'name': '主要测试集', 'description': 'MMMU多模态理解数据集', 'category': '多模态理解'}
             }
         },
         'ceval': {
@@ -1253,6 +1365,81 @@ async def check_stuck_tasks_endpoint(
         "fixed_task_ids": fixed_task_ids,
         "message": f"检查完成，修复了 {len(fixed_task_ids)} 个卡住的任务"
     }
+
+
+@router.post("/translate", response_model=TranslateResponse)
+async def translate_text(
+    request: TranslateRequest
+    # 临时移除认证: current_user: User = Depends(deps.get_current_user)
+):
+    """翻译文本"""
+    try:
+        # 简单的翻译逻辑：如果是英文则翻译为中文
+        text = request.text.strip()
+        target_lang = request.target_lang
+        
+        if not text:
+            return TranslateResponse(translated_text="")
+        
+        # 检测是否包含中文字符
+        has_chinese = any('\u4e00' <= char <= '\u9fff' for char in text)
+        
+        if not has_chinese and target_lang == "zh":
+            # 简单的英文到中文翻译映射（实际项目中应该使用专业的翻译服务）
+            translations = {
+                "A comprehensive benchmark for evaluating language models across various tasks and domains.": "一个全面的基准测试，用于评估语言模型在各种任务和领域中的表现。",
+                "A large-scale dataset for testing mathematical reasoning abilities.": "一个用于测试数学推理能力的大规模数据集。",
+                "Evaluates model performance on reading comprehension tasks.": "评估模型在阅读理解任务上的表现。",
+                "Tests logical reasoning and problem-solving capabilities.": "测试逻辑推理和问题解决能力。",
+                "A benchmark for evaluating code generation and understanding.": "一个用于评估代码生成和理解能力的基准测试。",
+                "Tests knowledge across multiple academic subjects.": "测试跨多个学科的知识。",
+                "Evaluates performance on scientific and technical questions.": "评估在科学和技术问题上的表现。",
+                "A benchmark for testing commonsense reasoning.": "一个用于测试常识推理的基准测试。",
+                "Tests understanding of natural language instructions.": "测试对自然语言指令的理解。",
+                "Evaluates performance on creative writing tasks.": "评估在创意写作任务上的表现。",
+                "A comprehensive benchmark for evaluating language models": "一个全面的基准测试，用于评估语言模型",
+                "A large-scale dataset for testing": "一个用于测试的大规模数据集",
+                "Evaluates model performance": "评估模型性能",
+                "Tests logical reasoning": "测试逻辑推理",
+                "A benchmark for evaluating": "一个用于评估的基准测试",
+                "Tests knowledge across": "测试跨领域知识",
+                "Evaluates performance on": "评估在...上的表现",
+                "A benchmark for testing": "一个用于测试的基准测试",
+                "Tests understanding of": "测试对...的理解",
+                "Evaluates performance on creative": "评估在创意...上的表现"
+            }
+            
+            # 查找精确匹配
+            if text in translations:
+                translated_text = translations[text]
+            else:
+                # 尝试部分匹配
+                translated_text = text
+                for key, value in translations.items():
+                    if key.lower() in text.lower():
+                        translated_text = text.replace(key, value)
+                        break
+                
+                # 如果仍然没有匹配，生成一个通用的翻译
+                if translated_text == text:
+                    if "benchmark" in text.lower():
+                        translated_text = f"基准测试：{text}"
+                    elif "dataset" in text.lower():
+                        translated_text = f"数据集：{text}"
+                    elif "evaluates" in text.lower():
+                        translated_text = f"评估：{text}"
+                    elif "tests" in text.lower():
+                        translated_text = f"测试：{text}"
+                    else:
+                        translated_text = f"描述：{text}"
+        else:
+            # 已经包含中文或非中文目标语言，返回原文
+            translated_text = text
+        
+        return TranslateResponse(translated_text=translated_text)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"翻译失败: {str(e)}")
 
 
 # 导出ws_manager供其他模块使用
