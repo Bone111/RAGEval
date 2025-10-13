@@ -29,7 +29,7 @@ import {
   BarChartOutlined,
   PlayCircleOutlined
 } from '@ant-design/icons';
-import { formatRunningTime } from '../../../utils/timeFormat';
+import { formatRunningTime, formatEffectiveDuration } from '../../../utils/timeFormat';
 import type { EvalTaskDetail, WebSocketMessage } from '@/types/evalscope.types';
 import { evalscopeService } from '@/services/evalscope.service';
 import { useEvalTaskWebSocket } from '@/hooks/useEvalTaskWebSocket';
@@ -402,9 +402,11 @@ const TaskMonitorPage: React.FC = () => {
               <Statistic
                 title="耗时"
                 value={
-                  task.started_at
-                    ? formatRunningTime(task.started_at, task.completed_at)
-                    : 'N/A'
+                  task.effective_duration 
+                    ? formatEffectiveDuration(task.effective_duration)
+                    : (task.started_at
+                        ? formatRunningTime(task.started_at, task.completed_at)
+                        : 'N/A')
                 }
               />
             </Col>

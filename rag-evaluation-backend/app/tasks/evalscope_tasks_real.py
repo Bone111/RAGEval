@@ -604,7 +604,13 @@ def run_real_evaluation_task(self, task_id: int):
         
         # 2. 更新状态为运行中
         task.status = 'running'
-        task.started_at = datetime.now()
+        current_time = datetime.now()
+        task.started_at = current_time
+        
+        # 记录首次开始时间（如果还未设置）
+        if not task.first_started_at:
+            task.first_started_at = current_time
+            
         task.celery_task_id = self.request.id  # 更新Celery任务ID
         if not task.extra_metadata:
             task.extra_metadata = {}

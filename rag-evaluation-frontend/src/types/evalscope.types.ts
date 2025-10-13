@@ -15,6 +15,9 @@ export interface EvalTask {
   created_at: string;
   started_at?: string;
   completed_at?: string;
+  first_started_at?: string;
+  total_paused_duration?: number;
+  effective_duration?: number;
   error_message?: string;
   model_args?: Record<string, any>;
   dataset_args?: Record<string, any>;

@@ -57,6 +57,8 @@ class ModelUpdateRequest(BaseModel):
     quality_rating: Optional[float] = Field(None, ge=1, le=10)
     capabilities: Optional[List[str]] = None
     languages: Optional[List[str]] = None
+    is_translation_model: Optional[bool] = None  # 是否为翻译专用模型
+    translation_priority: Optional[int] = Field(None, ge=0, le=100)  # 翻译优先级
 
 
 class LocalScanRequest(BaseModel):
@@ -112,6 +114,12 @@ class CopyModelRequest(BaseModel):
     notes: Optional[str] = Field(None, max_length=500, description="备注信息")
 
 
+class SetTranslationModelRequest(BaseModel):
+    """设置翻译模型请求"""
+    is_translation: bool = Field(True, description="是否为翻译专用模型")
+    priority: int = Field(50, ge=0, le=100, description="翻译优先级，0-100")
+
+
 # ==================== API 接口 ====================
 
 @router.get("/test")
@@ -122,9 +130,20 @@ async def test_endpoint():
 @router.get("/overview-test")
 async def get_models_overview_test(db: Session = Depends(get_db)):
     """获取模型总览统计（临时测试版本，不需要认证）"""
-    # 使用第一个找到的用户ID来测试
+    # 优先使用Bone用户的配置
     from sqlalchemy import text
-    user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
+    user_result = db.execute(text("""
+        SELECT u.id FROM users u
+        WHERE u.name = 'Bone' AND EXISTS (
+            SELECT 1 FROM user_model_configs umc 
+            WHERE umc.user_id = u.id AND umc.is_active = true
+        )
+        LIMIT 1
+    """)).first()
+    
+    # 如果没有找到Bone用户，使用第一个用户
+    if not user_result:
+        user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
     if not user_result:
         return {
             'total_models': 0,
@@ -166,17 +185,29 @@ async def get_models_list_test(
     """获取模型列表（临时测试版本）- 优先使用有配置的用户"""
     from sqlalchemy import text
     
-    # 优先查找有模型配置的用户（修复PostgreSQL DISTINCT + ORDER BY问题）
+    # 优先查找Bone用户的配置
     user_result = db.execute(text("""
         SELECT u.id, u.created_at
         FROM users u
-        WHERE EXISTS (
+        WHERE u.name = 'Bone' AND EXISTS (
             SELECT 1 FROM user_model_configs umc 
             WHERE umc.user_id = u.id AND umc.is_active = true
         )
-        ORDER BY u.created_at DESC
         LIMIT 1
     """)).first()
+    
+    # 如果没有找到Bone用户，查找其他有配置的用户
+    if not user_result:
+        user_result = db.execute(text("""
+            SELECT u.id, u.created_at
+            FROM users u
+            WHERE EXISTS (
+                SELECT 1 FROM user_model_configs umc 
+                WHERE umc.user_id = u.id AND umc.is_active = true
+            )
+            ORDER BY u.created_at DESC
+            LIMIT 1
+        """)).first()
     
     # 如果没有有配置的用户，使用第一个用户
     if not user_result:
@@ -252,6 +283,137 @@ async def get_model_detail_test(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取模型详情失败: {str(e)}")
+
+# ==================== 翻译模型管理接口 ====================
+
+@router.get("/translation-models")
+async def get_translation_models(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取翻译专用模型列表"""
+    service = ModelManagementService(db)
+    try:
+        translation_models = await service.get_translation_models(str(current_user.id))
+        return {"translation_models": translation_models}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取翻译模型失败: {str(e)}")
+
+
+@router.get("/translation-models-test")
+async def get_translation_models_test(db: Session = Depends(get_db)):
+    """获取翻译专用模型列表（测试版本）"""
+    from sqlalchemy import text
+    user_result = db.execute(text("""
+        SELECT u.id FROM users u
+        WHERE u.name = 'Bone' AND EXISTS (
+            SELECT 1 FROM user_model_configs umc 
+            WHERE umc.user_id = u.id AND umc.is_active = true
+        )
+        LIMIT 1
+    """)).first()
+    
+    # 如果没有找到Bone用户，使用第一个用户
+    if not user_result:
+        user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
+    if not user_result:
+        return {"translation_models": []}
+    
+    service = ModelManagementService(db)
+    try:
+        translation_models = await service.get_translation_models(str(user_result.id))
+        return {"translation_models": translation_models}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取翻译模型失败: {str(e)}")
+
+
+@router.get("/best-translation-model")
+async def get_best_translation_model(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取最佳翻译模型"""
+    service = ModelManagementService(db)
+    try:
+        best_model = await service.get_best_translation_model(str(current_user.id))
+        if not best_model:
+            raise HTTPException(status_code=404, detail="没有可用的翻译模型")
+        return {"best_translation_model": best_model}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取最佳翻译模型失败: {str(e)}")
+
+
+@router.get("/best-translation-model-test")
+async def get_best_translation_model_test(db: Session = Depends(get_db)):
+    """获取最佳翻译模型（测试版本）"""
+    from sqlalchemy import text
+    user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
+    if not user_result:
+        return {"best_translation_model": None}
+    
+    service = ModelManagementService(db)
+    try:
+        best_model = await service.get_best_translation_model(str(user_result.id))
+        return {"best_translation_model": best_model}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取最佳翻译模型失败: {str(e)}")
+
+
+@router.post("/{model_id}/set-translation-model")
+async def set_translation_model(
+    model_id: int,
+    request: SetTranslationModelRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """设置模型为翻译专用模型"""
+    service = ModelManagementService(db)
+    try:
+        success = await service.set_translation_model(
+            str(current_user.id), 
+            model_id, 
+            request.is_translation, 
+            request.priority
+        )
+        if not success:
+            raise HTTPException(status_code=404, detail="模型不存在")
+        return {"success": True, "message": "翻译模型设置成功"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"设置翻译模型失败: {str(e)}")
+
+
+@router.post("/{model_id}/set-translation-model-test")
+async def set_translation_model_test(
+    model_id: int,
+    request: SetTranslationModelRequest,
+    db: Session = Depends(get_db)
+):
+    """设置模型为翻译专用模型（测试版本）"""
+    from sqlalchemy import text
+    user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
+    if not user_result:
+        raise HTTPException(status_code=404, detail="没有找到用户")
+    
+    service = ModelManagementService(db)
+    try:
+        success = await service.set_translation_model(
+            str(user_result.id), 
+            model_id, 
+            request.is_translation, 
+            request.priority
+        )
+        if not success:
+            raise HTTPException(status_code=404, detail="模型不存在")
+        return {"success": True, "message": "翻译模型设置成功"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"设置翻译模型失败: {str(e)}")
+
 
 @router.get("/{model_id}")
 async def get_model_detail(
@@ -471,7 +633,18 @@ async def toggle_local_model_test(
 ):
     """切换本地模型的启用/禁用状态（测试版本）"""
     from sqlalchemy import text
-    user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
+    user_result = db.execute(text("""
+        SELECT u.id FROM users u
+        WHERE u.name = 'Bone' AND EXISTS (
+            SELECT 1 FROM user_model_configs umc 
+            WHERE umc.user_id = u.id AND umc.is_active = true
+        )
+        LIMIT 1
+    """)).first()
+    
+    # 如果没有找到Bone用户，使用第一个用户
+    if not user_result:
+        user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
     if not user_result:
         raise HTTPException(status_code=404, detail="用户不存在")
     
@@ -759,3 +932,35 @@ async def copy_model(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"复制模型失败: {str(e)}")
+
+
+
+
+@router.get("/best-translation-model")
+async def get_best_translation_model(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取最佳翻译模型"""
+    service = ModelManagementService(db)
+    try:
+        best_model = await service.get_best_translation_model(str(current_user.id))
+        return {"best_translation_model": best_model}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取最佳翻译模型失败: {str(e)}")
+
+
+@router.get("/best-translation-model-test")
+async def get_best_translation_model_test(db: Session = Depends(get_db)):
+    """获取最佳翻译模型（测试版本）"""
+    from sqlalchemy import text
+    user_result = db.execute(text("SELECT id FROM users LIMIT 1")).first()
+    if not user_result:
+        return {"best_translation_model": None}
+    
+    service = ModelManagementService(db)
+    try:
+        best_model = await service.get_best_translation_model(str(user_result.id))
+        return {"best_translation_model": best_model}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取最佳翻译模型失败: {str(e)}")

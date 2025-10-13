@@ -475,11 +475,21 @@ const BenchmarkHubPage: React.FC = () => {
 
       const result = await response.json();
       console.log('翻译结果:', result);
-      return result.translated_text || text;
+      
+      const translatedText = result.translated_text || text;
+      
+      // 检查翻译结果是否有效（不是简单的原文）
+      if (translatedText !== text && translatedText.length > 0) {
+        return translatedText;
+      } else {
+        // 如果翻译结果无效，返回带前缀的原文
+        return `描述：${text}`;
+      }
     } catch (error) {
       console.error('翻译失败:', error);
-      // 如果翻译失败，返回原文
-      return text;
+      message.warning('翻译服务暂时不可用，显示原文');
+      // 如果翻译失败，返回带前缀的原文
+      return `描述：${text}`;
     } finally {
       setTranslating(false);
     }

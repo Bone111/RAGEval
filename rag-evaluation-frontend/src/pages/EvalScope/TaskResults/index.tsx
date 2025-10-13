@@ -30,7 +30,7 @@ import {
 } from '@ant-design/icons';
 import * as echarts from 'echarts';
 import { evalscopeService } from '@/services/evalscope.service';
-import { formatRunningTime } from '../../../utils/timeFormat';
+import { formatRunningTime, formatEffectiveDuration } from '../../../utils/timeFormat';
 import type { EvalTask, EvalResult } from '@/types/evalscope.types';
 
 // JSON报告数据结构
@@ -805,9 +805,13 @@ const TaskResults: React.FC = () => {
   }
 
   const bestResult = getBestPerformance();
-  const duration = task.started_at && task.completed_at 
-    ? formatRunningTime(task.started_at, task.completed_at)
-    : 'N/A';
+  
+  // 优先使用有效执行时长（排除暂停时间），否则使用传统计算方式
+  const duration = task.effective_duration 
+    ? formatEffectiveDuration(task.effective_duration)
+    : (task.started_at && task.completed_at 
+        ? formatRunningTime(task.started_at, task.completed_at)
+        : 'N/A');
 
   return (
     <div style={{ padding: '24px' }}>

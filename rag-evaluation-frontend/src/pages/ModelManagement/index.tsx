@@ -115,8 +115,9 @@ const ModelManagement: React.FC = () => {
   const fetchOverviewData = async () => {
     setLoading(true);
     try {
-      // 临时使用测试端点绕过认证问题
-      const response = await fetch('/api/v1/model-management/overview-test');
+      const response = await fetch('/api/v1/model-management/overview', {
+        headers: getAuthHeaders()
+      });
       
       if (response.ok) {
         const data = await response.json();
@@ -149,8 +150,9 @@ const ModelManagement: React.FC = () => {
   const fetchModelsList = async () => {
     setLoading(true);
     try {
-      // 临时使用测试端点绕过认证问题
-      const response = await fetch('/api/v1/model-management/list-test?page=1&page_size=100');
+      const response = await fetch('/api/v1/model-management/list?page=1&page_size=100', {
+        headers: getAuthHeaders()
+      });
       
       if (response.ok) {
         const data = await response.json();
@@ -230,8 +232,9 @@ const ModelManagement: React.FC = () => {
   // 查看模型详情
   const viewModelDetail = async (modelId: number) => {
     try {
-      // 临时使用测试端点
-      const response = await fetch(`/api/v1/model-management/${modelId}/detail-test`);
+      const response = await fetch(`/api/v1/model-management/${modelId}`, {
+        headers: getAuthHeaders()
+      });
       
       if (response.ok) {
         const data = await response.json();
@@ -272,9 +275,9 @@ const ModelManagement: React.FC = () => {
   const handleSyncExistingModels = async () => {
     setLoading(true);
     try {
-      // 临时使用测试端点绕过认证问题
-      const response = await fetch('/api/v1/model-management/sync-existing-test', {
-        method: 'POST'
+      const response = await fetch('/api/v1/model-management/sync-existing', {
+        method: 'POST',
+        headers: getAuthHeaders()
       });
       
       if (response.ok) {
@@ -307,7 +310,9 @@ const ModelManagement: React.FC = () => {
             });
           } else {
             // 无变更，检查是否有模型
-            const modelsResponse = await fetch('/api/v1/model-management/list-test?page=1&page_size=100');
+            const modelsResponse = await fetch('/api/v1/model-management/list?page=1&page_size=100', {
+              headers: getAuthHeaders()
+            });
             if (modelsResponse.ok) {
               const modelsData = await modelsResponse.json();
               const existingModels = modelsData.models || [];
@@ -373,8 +378,9 @@ const ModelManagement: React.FC = () => {
   // 获取本地模型注册表
   const fetchLocalRegistry = async () => {
     try {
-      // 临时使用测试端点
-      const response = await fetch('/api/v1/model-management/local-registry/list-test');
+      const response = await fetch('/api/v1/model-management/local-registry/list', {
+        headers: getAuthHeaders()
+      });
       
       if (response.ok) {
         const data = await response.json();
@@ -418,8 +424,9 @@ const ModelManagement: React.FC = () => {
   const handleAutoRegisterLocal = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/v1/model-management/auto-register-local-test', {
-        method: 'POST'
+      const response = await fetch('/api/v1/model-management/auto-register-local', {
+        method: 'POST',
+        headers: getAuthHeaders()
       });
       
       if (response.ok) {
@@ -444,11 +451,9 @@ const ModelManagement: React.FC = () => {
   // 切换本地模型启用状态
   const handleToggleLocalModel = async (registryId: number, isEnabled: boolean) => {
     try {
-      const response = await fetch('/api/v1/model-management/local-registry/toggle-test', {
+      const response = await fetch('/api/v1/model-management/local-registry/toggle', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           registry_id: registryId,
           is_enabled: isEnabled

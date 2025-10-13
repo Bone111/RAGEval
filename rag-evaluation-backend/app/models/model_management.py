@@ -75,6 +75,10 @@ class ModelInfo(Base):
     
     # 额外元数据
     extra_metadata = Column(JSON, default={})
+    
+    # 翻译配置
+    is_translation_model = Column(Boolean, default=False, index=True)  # 是否为翻译专用模型
+    translation_priority = Column(Integer, default=0)  # 翻译优先级，数字越大优先级越高
 
 
 class ModelUsageLog(Base):

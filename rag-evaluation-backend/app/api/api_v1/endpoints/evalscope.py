@@ -23,6 +23,9 @@ from app.models.user import User
 from app.models.evalscope_task import EvalScopeResult, EvalScopeTask
 from app.tasks.task_monitor import check_stuck_tasks
 from pydantic import BaseModel
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -208,6 +211,9 @@ async def get_task(
     
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
+    
+    # 计算有效执行时长
+    task.effective_duration = task.get_effective_duration()
     
     return task
 
@@ -508,9 +514,19 @@ async def resume_task(
         
         # 更新任务状态
         task.status = 'running'
+        # 记录恢复时间，用于计算暂停时长
+        resumed_at = datetime.now()
+        task.started_at = resumed_at
+        
+        # 计算暂停时长并累加
+        if task.extra_metadata and 'paused_at' in task.extra_metadata:
+            paused_at = datetime.fromisoformat(task.extra_metadata['paused_at'])
+            pause_duration = int((resumed_at - paused_at).total_seconds())
+            task.add_pause_duration(pause_duration)
+        
         if not task.extra_metadata:
             task.extra_metadata = {}
-        task.extra_metadata['resumed_at'] = datetime.now().isoformat()
+        task.extra_metadata['resumed_at'] = resumed_at.isoformat()
         task.extra_metadata['resumable_datasets'] = resumable_datasets
         db.commit()
         
@@ -650,9 +666,19 @@ async def continue_task(
         # 更新任务状态
         task.status = 'running'
         task.error_message = None  # 清空错误信息
+        # 记录继续时间，用于计算暂停时长
+        continued_at = datetime.now()
+        task.started_at = continued_at
+        
+        # 计算暂停时长并累加（如果有暂停记录）
+        if task.extra_metadata and 'paused_at' in task.extra_metadata:
+            paused_at = datetime.fromisoformat(task.extra_metadata['paused_at'])
+            pause_duration = int((continued_at - paused_at).total_seconds())
+            task.add_pause_duration(pause_duration)
+        
         if not task.extra_metadata:
             task.extra_metadata = {}
-        task.extra_metadata['continued_at'] = datetime.now().isoformat()
+        task.extra_metadata['continued_at'] = continued_at.isoformat()
         db.commit()
         
         # 重新启动任务（使用use_cache功能实现断点续评）
@@ -1429,76 +1455,79 @@ async def check_stuck_tasks_endpoint(
 
 @router.post("/translate", response_model=TranslateResponse)
 async def translate_text(
-    request: TranslateRequest
+    request: TranslateRequest,
+    db: Session = Depends(deps.get_db)
     # 临时移除认证: current_user: User = Depends(deps.get_current_user)
 ):
     """翻译文本"""
     try:
-        # 简单的翻译逻辑：如果是英文则翻译为中文
         text = request.text.strip()
         target_lang = request.target_lang
         
         if not text:
             return TranslateResponse(translated_text="")
         
-        # 检测是否包含中文字符
-        has_chinese = any('\u4e00' <= char <= '\u9fff' for char in text)
-        
-        if not has_chinese and target_lang == "zh":
-            # 简单的英文到中文翻译映射（实际项目中应该使用专业的翻译服务）
-            translations = {
-                "A comprehensive benchmark for evaluating language models across various tasks and domains.": "一个全面的基准测试，用于评估语言模型在各种任务和领域中的表现。",
-                "A large-scale dataset for testing mathematical reasoning abilities.": "一个用于测试数学推理能力的大规模数据集。",
-                "Evaluates model performance on reading comprehension tasks.": "评估模型在阅读理解任务上的表现。",
-                "Tests logical reasoning and problem-solving capabilities.": "测试逻辑推理和问题解决能力。",
-                "A benchmark for evaluating code generation and understanding.": "一个用于评估代码生成和理解能力的基准测试。",
-                "Tests knowledge across multiple academic subjects.": "测试跨多个学科的知识。",
-                "Evaluates performance on scientific and technical questions.": "评估在科学和技术问题上的表现。",
-                "A benchmark for testing commonsense reasoning.": "一个用于测试常识推理的基准测试。",
-                "Tests understanding of natural language instructions.": "测试对自然语言指令的理解。",
-                "Evaluates performance on creative writing tasks.": "评估在创意写作任务上的表现。",
-                "A comprehensive benchmark for evaluating language models": "一个全面的基准测试，用于评估语言模型",
-                "A large-scale dataset for testing": "一个用于测试的大规模数据集",
-                "Evaluates model performance": "评估模型性能",
-                "Tests logical reasoning": "测试逻辑推理",
-                "A benchmark for evaluating": "一个用于评估的基准测试",
-                "Tests knowledge across": "测试跨领域知识",
-                "Evaluates performance on": "评估在...上的表现",
-                "A benchmark for testing": "一个用于测试的基准测试",
-                "Tests understanding of": "测试对...的理解",
-                "Evaluates performance on creative": "评估在创意...上的表现"
-            }
+        # 使用已配置的大模型进行翻译
+        try:
+            # 尝试导入LLM翻译服务
+            import sys
+            import os
+            sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+            from llm_translation_service import translate_text_with_llm
             
-            # 查找精确匹配
-            if text in translations:
-                translated_text = translations[text]
-            else:
-                # 尝试部分匹配
-                translated_text = text
-                for key, value in translations.items():
-                    if key.lower() in text.lower():
-                        translated_text = text.replace(key, value)
-                        break
+            # 使用指定的翻译模型进行翻译
+            translated_text = translate_text_with_llm(text, target_lang, db_session=db)
+            
+        except ImportError:
+            # 如果翻译服务不可用，使用简单的回退方案
+            logger.warning("翻译服务不可用，使用简单回退方案")
+            
+            # 检测是否包含中文字符
+            has_chinese = any('\u4e00' <= char <= '\u9fff' for char in text)
+            
+            if not has_chinese and target_lang == "zh":
+                # 简单的关键词替换
+                translations = {
+                    "benchmark": "基准测试",
+                    "dataset": "数据集", 
+                    "evaluates": "评估",
+                    "tests": "测试",
+                    "comprehensive": "全面的",
+                    "large-scale": "大规模的",
+                    "performance": "性能",
+                    "reasoning": "推理",
+                    "comprehension": "理解",
+                    "generation": "生成",
+                    "understanding": "理解",
+                    "knowledge": "知识",
+                    "scientific": "科学的",
+                    "technical": "技术的",
+                    "commonsense": "常识",
+                    "creative": "创意的",
+                    "writing": "写作",
+                    "academic": "学术的",
+                    "subjects": "学科",
+                    "capabilities": "能力",
+                    "tasks": "任务",
+                    "domains": "领域"
+                }
                 
-                # 如果仍然没有匹配，生成一个通用的翻译
+                translated_text = text
+                for en_word, zh_word in translations.items():
+                    translated_text = translated_text.replace(en_word, zh_word)
+                    translated_text = translated_text.replace(en_word.capitalize(), zh_word)
+                    translated_text = translated_text.replace(en_word.upper(), zh_word)
+                
+                # 如果翻译结果和原文相同，添加前缀
                 if translated_text == text:
-                    if "benchmark" in text.lower():
-                        translated_text = f"基准测试：{text}"
-                    elif "dataset" in text.lower():
-                        translated_text = f"数据集：{text}"
-                    elif "evaluates" in text.lower():
-                        translated_text = f"评估：{text}"
-                    elif "tests" in text.lower():
-                        translated_text = f"测试：{text}"
-                    else:
-                        translated_text = f"描述：{text}"
-        else:
-            # 已经包含中文或非中文目标语言，返回原文
-            translated_text = text
+                    translated_text = f"描述：{text}"
+            else:
+                translated_text = text
         
         return TranslateResponse(translated_text=translated_text)
         
     except Exception as e:
+        logger.error(f"翻译失败: {e}")
         raise HTTPException(status_code=500, detail=f"翻译失败: {str(e)}")
 
 

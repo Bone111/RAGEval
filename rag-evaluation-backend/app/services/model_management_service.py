@@ -846,7 +846,9 @@ class ModelManagementService:
             'created_at': model.created_at.isoformat() if model.created_at else None,
             'updated_at': model.updated_at.isoformat() if model.updated_at else None,
             'last_scanned_at': model.last_scanned_at.isoformat() if model.last_scanned_at else None,
-            'extra_metadata': model.extra_metadata
+            'extra_metadata': model.extra_metadata,
+            'is_translation_model': model.is_translation_model,
+            'translation_priority': model.translation_priority
         }
     
     def _serialize_category(self, category: ModelCategory) -> Dict[str, Any]:
@@ -1398,6 +1400,94 @@ class ModelManagementService:
             logger.error(f"刷新模型显示名称失败: {e}")
             self.db.rollback()
             return 0
+
+    # ==================== 翻译模型管理 ====================
+    
+    async def get_translation_models(self, user_id: str) -> List[Dict[str, Any]]:
+        """获取翻译专用模型列表"""
+        try:
+            translation_models = self.db.query(ModelInfo).filter(
+                ModelInfo.user_id == user_id,
+                ModelInfo.is_active == True,
+                ModelInfo.is_translation_model == True,
+                ModelInfo.status == 'available'
+            ).order_by(
+                desc(ModelInfo.translation_priority),
+                desc(ModelInfo.usage_count)
+            ).all()
+            
+            return [self._serialize_model_info(model) for model in translation_models]
+            
+        except Exception as e:
+            logger.error(f"获取翻译模型失败: {e}")
+            return []
+    
+    async def get_best_translation_model(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """获取最佳翻译模型"""
+        try:
+            # 优先获取翻译专用模型
+            translation_model = self.db.query(ModelInfo).filter(
+                ModelInfo.user_id == user_id,
+                ModelInfo.is_active == True,
+                ModelInfo.is_translation_model == True,
+                ModelInfo.status == 'available'
+            ).order_by(
+                desc(ModelInfo.translation_priority),
+                desc(ModelInfo.usage_count)
+            ).first()
+            
+            if translation_model:
+                return self._serialize_model_info(translation_model)
+            
+            # 如果没有翻译专用模型，获取支持对话的模型
+            chat_model = self.db.query(ModelInfo).filter(
+                ModelInfo.user_id == user_id,
+                ModelInfo.is_active == True,
+                ModelInfo.status == 'available',
+                ModelInfo.capabilities.contains(['chat'])
+            ).order_by(
+                desc(ModelInfo.usage_count),
+                desc(ModelInfo.quality_rating).nullslast()
+            ).first()
+            
+            if chat_model:
+                return self._serialize_model_info(chat_model)
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"获取最佳翻译模型失败: {e}")
+            return None
+    
+    async def set_translation_model(
+        self, 
+        user_id: str, 
+        model_id: int, 
+        is_translation: bool = True,
+        priority: int = 50
+    ) -> bool:
+        """设置模型为翻译专用模型"""
+        try:
+            model = self.db.query(ModelInfo).filter(
+                ModelInfo.user_id == user_id,
+                ModelInfo.id == model_id,
+                ModelInfo.is_active == True
+            ).first()
+            
+            if not model:
+                return False
+            
+            model.is_translation_model = is_translation
+            model.translation_priority = priority if is_translation else 0
+            model.updated_at = datetime.utcnow()
+            
+            self.db.commit()
+            return True
+            
+        except Exception as e:
+            logger.error(f"设置翻译模型失败: {e}")
+            self.db.rollback()
+            return False
     
     async def toggle_local_model_enabled(self, registry_id: int, is_enabled: bool, user_id: str) -> bool:
         """切换本地模型的启用/禁用状态"""

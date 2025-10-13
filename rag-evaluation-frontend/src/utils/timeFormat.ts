@@ -71,6 +71,15 @@ export function formatRunningTime(startTime: string | Date, endTime?: string | D
 }
 
 /**
+ * 格式化有效执行时长（排除暂停时间）
+ * @param effectiveDurationSeconds 有效执行时长（秒）
+ * @returns 格式化后的有效执行时长
+ */
+export function formatEffectiveDuration(effectiveDurationSeconds: number): string {
+  return formatDuration(effectiveDurationSeconds);
+}
+
+/**
  * 获取时间单位的简短描述
  * @param seconds 秒数
  * @returns 简短的时间描述
