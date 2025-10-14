@@ -330,8 +330,15 @@ def run_eval_in_background(task_id: int, task_data: schemas.TaskCreate):
                     return dataset_name, result
                 
                 # 并行执行所有数据集
+                from app.core.config import settings
+                
+                # 限制最大并行数，避免资源过度消耗
+                max_workers = min(len(task.datasets), settings.EVALSCOPE_MAX_PARALLEL_DATASETS)
+                print(f"📊 最大并行数: {max_workers} (配置上限: {settings.EVALSCOPE_MAX_PARALLEL_DATASETS})")
+                
                 results = {}
-                with concurrent.futures.ThreadPoolExecutor(max_workers=len(task.datasets)) as executor:
+                failed_datasets = []
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                     future_to_dataset = {
                         executor.submit(run_single_dataset, dataset): dataset 
                         for dataset in task.datasets
@@ -344,9 +351,15 @@ def run_eval_in_background(task_id: int, task_data: schemas.TaskCreate):
                             results[dataset_name] = result
                         except Exception as exc:
                             print(f"❌ 数据集 {dataset_name} 评测失败: {exc}")
-                            raise exc
+                            failed_datasets.append(dataset_name)
+                            # 不要中断循环，继续处理其他数据集
+                            continue
                 
-                print(f"🎉 所有 {len(task.datasets)} 个数据集并行评测完成")
+                # 记录失败的数据集
+                if failed_datasets:
+                    print(f"⚠️ 以下数据集执行失败: {', '.join(failed_datasets)}")
+                
+                print(f"🎉 所有 {len(task.datasets)} 个数据集并行评测完成（成功: {len(results)}, 失败: {len(failed_datasets)}）")
             else:
                 # 单个数据集，使用原有逻辑
                 # 检查任务是否被取消

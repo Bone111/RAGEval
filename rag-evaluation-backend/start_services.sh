@@ -44,7 +44,7 @@ done
 
 # 启动Celery Worker
 echo -e "${YELLOW}🚀 启动Celery Worker...${NC}"
-conda activate rag—eval && celery -A app.tasks.evalscope_tasks_real worker --loglevel=info --concurrency=2 &
+conda activate rag—eval && celery -A app.tasks.evalscope_tasks worker --loglevel=info --concurrency=2 &
 CELERY_PID=$!
 
 # 等待Worker启动
@@ -61,7 +61,7 @@ else
     echo -e "${RED}❌ 后端服务: 未运行${NC}"
 fi
 
-if ps aux | grep -E "celery.*evalscope_tasks_real.*worker" | grep -v grep >/dev/null; then
+if ps aux | grep -E "celery.*evalscope_tasks.*worker" | grep -v grep >/dev/null; then
     echo -e "${GREEN}✅ Celery Worker: 运行中${NC}"
 else
     echo -e "${RED}❌ Celery Worker: 未运行${NC}"

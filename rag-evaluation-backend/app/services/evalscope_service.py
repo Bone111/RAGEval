@@ -387,6 +387,14 @@ class EvalScopeService:
         task.completed_at = datetime.now()
         db.commit()
         
+        # 标记任务为已取消（用于Python API评测）
+        try:
+            from app.api.api_v1.endpoints.evalscope_sync import mark_task_cancelled
+            mark_task_cancelled(task_id)
+            logger.info(f"任务 {task_id} 已标记为取消状态")
+        except Exception as e:
+            logger.warning(f"标记任务取消状态失败: {e}")
+        
         # 发送Celery取消信号
         try:
             from celery import current_app

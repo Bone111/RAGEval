@@ -127,6 +127,8 @@ class Settings(BaseSettings):
     EVALSCOPE_WEBSOCKET_TIMEOUT: float = float(os.getenv("EVALSCOPE_WEBSOCKET_TIMEOUT", "0.5"))
     # 是否启用Python API优先（True则优先使用Python API，更可靠）
     EVALSCOPE_PREFER_PYTHON_API: bool = os.getenv("EVALSCOPE_PREFER_PYTHON_API", "true").lower() == "true"
+    # 最大并行数据集数量（避免资源过度消耗）
+    EVALSCOPE_MAX_PARALLEL_DATASETS: int = int(os.getenv("EVALSCOPE_MAX_PARALLEL_DATASETS", "10"))
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -353,12 +353,12 @@ class EnhancedProgressReporter:
         
     def _monitor_prediction_files(self, work_dir: Path):
         """监控预测文件生成进度"""
-        predictions_dir = work_dir / "predictions"
-        
         while self.monitoring_active:
             try:
-                if predictions_dir.exists():
-                    self._update_subset_progress_from_files(predictions_dir)
+                # 递归查找所有 predictions 目录
+                for predictions_dir in work_dir.rglob("predictions"):
+                    if predictions_dir.is_dir():
+                        self._update_subset_progress_from_files(predictions_dir)
                 time.sleep(5)  # 每5秒检查一次
             except Exception as e:
                 self.logger.warning(f"进度监控错误: {e}")
@@ -1023,11 +1023,10 @@ def run_real_evaluation_task(self, task_id: int):
                     reporter.log("INFO", f"▶️  评测数据集: {dataset_name}")
                     reporter.update_dataset_progress(dataset_name, status='running', current_step='准备')
                     
-                    # 确定数据集工作目录 - 强制拆分目录
-                    # 每个数据集必须有独立的目录，EvalScope会在该目录下创建时间戳目录
+                    # 为数据集创建独立目录
+                    # EvalScope会在此目录下创建时间戳目录（如: dataset_name/20251014_104603/）
                     dataset_work_dir = work_dir / dataset_name
-                    dataset_work_dir.mkdir(parents=True, exist_ok=True)
-                    reporter.log("INFO", f"🔧 [{dataset_name}] 创建独立工作目录: {dataset_work_dir}")
+                    reporter.log("INFO", f"🔧 [{dataset_name}] 数据集目录: {dataset_work_dir}")
                     
                     # 如果是恢复的任务，查找缓存目录
                     cache_dir = None
@@ -1089,10 +1088,32 @@ def run_real_evaluation_task(self, task_id: int):
                     process_manager.save_process_info(dataset_name, current_pid, cmd_args)
                     reporter.log("INFO", f"💾 已保存进程信息: {dataset_name} -> PID {current_pid}")
                     
-                    # 执行评测（添加超时和错误处理）
+                    # 🔧 为每个数据集创建独立的日志配置，避免多线程冲突
+                    import logging
+                    import threading
+                    
+                    # 创建数据集特定的logger
+                    dataset_logger_name = f"evalscope_dataset_{task_id}_{dataset_name}_{threading.get_ident()}"
+                    dataset_logger = logging.getLogger(dataset_logger_name)
+                    dataset_logger.setLevel(logging.INFO)
+                    dataset_logger.propagate = False  # 不传播到父logger
+                    
+                    # 为这个logger添加文件处理器
+                    log_file = dataset_work_dir / "eval_log.log"
+                    file_handler = logging.FileHandler(log_file, mode='w')
+                    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s: %(message)s')
+                    file_handler.setFormatter(formatter)
+                    dataset_logger.addHandler(file_handler)
+                    
+                    # 临时替换evalscope的logger
+                    original_logger = logging.getLogger('evalscope')
+                    original_handlers = original_logger.handlers.copy()
+                    original_logger.handlers.clear()
+                    original_logger.addHandler(file_handler)
+                    
                     try:
+                        # 执行评测（添加超时和错误处理）
                         import signal
-                        import threading
                         
                         # 设置超时机制
                         timeout_seconds = 3600  # 1小时超时
@@ -1165,6 +1186,14 @@ def run_real_evaluation_task(self, task_id: int):
                                     reporter.log("WARNING", f"⚠️ 加载结果失败: {load_error}")
                         raise
                     
+                    finally:
+                        # 恢复原始logger配置
+                        original_logger.handlers.clear()
+                        for handler in original_handlers:
+                            original_logger.addHandler(handler)
+                        # 清理数据集特定的logger
+                        dataset_logger.handlers.clear()
+                    
                     # 评测完成后检查取消状态
                     if getattr(self.request, 'cancelled', False):
                         reporter.log("WARNING", f"⚠️ 任务已被取消，停止处理结果")
@@ -1182,61 +1211,86 @@ def run_real_evaluation_task(self, task_id: int):
                     
                     return dataset_name, parsed_results
                 
-                # 并行处理多个数据集 - 强制并行
+                # 并行处理多个数据集 - 使用线程池
                 reporter.log("INFO", f"🚀 使用Python API并行处理 {len(task.datasets)} 个数据集")
                 import concurrent.futures
+                from app.core.config import settings
+                
+                # 限制最大并行数，避免资源过度消耗
+                max_workers = min(len(task.datasets), settings.EVALSCOPE_MAX_PARALLEL_DATASETS)
+                reporter.log("INFO", f"📊 最大并行数: {max_workers} (配置上限: {settings.EVALSCOPE_MAX_PARALLEL_DATASETS})")
+                reporter.log("INFO", f"⚙️  已禁用EvalScope日志重配置，所有日志输出到Celery日志")
                 
                 results = []
-                with concurrent.futures.ThreadPoolExecutor(max_workers=len(task.datasets)) as executor:
+                failed_datasets = []
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                     future_to_dataset = {
                         executor.submit(run_single_dataset, dataset): dataset 
                         for dataset in task.datasets
                     }
                     
                     for future in concurrent.futures.as_completed(future_to_dataset):
-                        result = future.result()
-                        
-                        # 处理不同的返回类型
-                        if isinstance(result, dict) and result.get('status') == 'cancelled':
-                            reporter.log("WARNING", f"⚠️ 数据集评测被取消")
-                            continue
-                        elif isinstance(result, dict) and result.get('status') == 'loaded':
-                            # 从文件加载的结果
-                            loaded_results = result.get('results', [])
-                            results.extend(loaded_results)
-                            continue
-                        elif isinstance(result, tuple) and len(result) == 2:
-                            # 正常评测结果
-                            dataset_name, parsed_results = result
-                            results.extend(parsed_results)
+                        dataset = future_to_dataset[future]
+                        try:
+                            result = future.result()
                             
-                            # 更新数据集完成状态
-                            reporter.update_dataset_progress(dataset_name, status='completed')
-                            reporter.log("INFO", f"✅ 数据集 {dataset_name} 评测完成")
-                            
-                            progress = len(results) * 80 / len(task.datasets) + 15
-                            reporter.update_progress(int(progress), f"完成数据集 {dataset_name}")
-                        else:
-                            reporter.log("WARNING", f"⚠️ 未知的返回结果类型: {type(result)}")
+                            # 处理不同的返回类型
+                            if isinstance(result, dict) and result.get('status') == 'cancelled':
+                                reporter.log("WARNING", f"⚠️ 数据集 {dataset} 评测被取消")
+                                continue
+                            elif isinstance(result, dict) and result.get('status') == 'loaded':
+                                # 从文件加载的结果
+                                loaded_results = result.get('results', [])
+                                results.extend(loaded_results)
+                                reporter.log("INFO", f"✅ 数据集 {dataset} 从缓存加载完成")
+                                continue
+                            elif isinstance(result, tuple) and len(result) == 2:
+                                # 正常评测结果
+                                dataset_name, parsed_results = result
+                                results.extend(parsed_results)
+                                
+                                # 更新数据集完成状态
+                                reporter.update_dataset_progress(dataset_name, status='completed')
+                                reporter.log("INFO", f"✅ 数据集 {dataset_name} 评测完成")
+                                
+                                progress = len(results) * 80 / len(task.datasets) + 15
+                                reporter.update_progress(int(progress), f"完成数据集 {dataset_name}")
+                            else:
+                                reporter.log("WARNING", f"⚠️ 未知的返回结果类型: {type(result)}")
+                        except Exception as e:
+                            reporter.log("ERROR", f"❌ 数据集 {dataset} 执行失败: {e}")
+                            reporter.update_dataset_progress(dataset, status='failed')
+                            failed_datasets.append(dataset)
+                            # 不要中断循环，继续处理其他数据集
+                            continue
                     
                     all_results = results
                 
+                # 记录失败的数据集
+                if failed_datasets:
+                    reporter.log("WARNING", f"⚠️ 以下数据集执行失败: {', '.join(failed_datasets)}")
+                    # 如果所有数据集都失败了，才标记为Python API失败
+                    if len(failed_datasets) == len(task.datasets):
+                        reporter.log("ERROR", f"❌ 所有 {len(task.datasets)} 个数据集都失败了")
+                        raise Exception(f"所有数据集执行失败: {', '.join(failed_datasets)}")
+                
                 reporter.log("INFO", "")
-                reporter.log("INFO", "🎉 所有数据集评测完成")
+                reporter.log("INFO", f"🎉 所有数据集评测完成（成功: {len(results)}, 失败: {len(failed_datasets)}）")
                 
                 # Python API 成功，直接跳转到结果处理
                 python_api_success = True
                 
             except Exception as api_error:
                 reporter.log("WARNING", "")
-                reporter.log("WARNING", "⚠️  Python API执行失败，即将回退到命令行方式")
+                reporter.log("WARNING", "⚠️  Python API执行失败，回退到命令行方式")
                 reporter.log("WARNING", f"💥 错误原因: {api_error}")
-                reporter.log("WARNING", f"🔄 回退策略: 使用命令行模式重新执行")
+                reporter.log("WARNING", f"🔄 回退策略: 使用命令行模式执行")
                 reporter.log("WARNING", "")
-                # 继续使用命令行方式
+                # 回退到命令行方式
                 python_api_success = False
+                all_results = []
             
-            # 只有Python API失败时才使用命令行方式
+            # 使用命令行方式（Python API失败或多数据集任务）
             if not python_api_success:
                 # 构建evalscope命令 - 支持多数据集并行处理
                 # 修复模型ID格式问题 - 正确处理用户配置的模型
@@ -1394,10 +1448,10 @@ def run_real_evaluation_task(self, task_id: int):
                 
                 # 为所有数据集命令添加工作目录参数和API参数
                 for i, (dataset_name, cmd_args) in enumerate(dataset_commands):
-                    # 为每个数据集使用独立的工作目录 - 强制拆分目录
+                    # 为数据集创建独立目录
+                    # EvalScope会在此目录下创建时间戳目录
                     dataset_work_dir = work_dir / dataset_name
-                    dataset_work_dir.mkdir(parents=True, exist_ok=True)
-                    reporter.log("INFO", f"🔧 [{dataset_name}] 创建独立工作目录: {dataset_work_dir}")
+                    reporter.log("INFO", f"🔧 [{dataset_name}] 数据集目录: {dataset_work_dir}")
                     cmd_args.extend(['--work-dir', str(dataset_work_dir)])
                     
                     # 如果是恢复的任务，添加use-cache参数以继续执行
@@ -1558,10 +1612,15 @@ def run_real_evaluation_task(self, task_id: int):
                 
                 # 并行执行所有数据集
                 import concurrent.futures
+                from app.core.config import settings
                 stdout_lines = []
                 stderr_lines = []
                 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=len(dataset_commands)) as executor:
+                # 限制最大并行数，避免资源过度消耗
+                max_workers = min(len(dataset_commands), settings.EVALSCOPE_MAX_PARALLEL_DATASETS)
+                reporter.log("INFO", f"📊 最大并行数: {max_workers} (配置上限: {settings.EVALSCOPE_MAX_PARALLEL_DATASETS})")
+                
+                with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
                     # 提交所有任务
                     future_to_dataset = {
                         executor.submit(run_dataset_command, dataset_name, cmd_args): dataset_name 
