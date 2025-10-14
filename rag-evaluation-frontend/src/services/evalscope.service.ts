@@ -30,9 +30,11 @@ export const evalscopeService = {
 
   /**
    * 创建并同步执行评测任务（真实评测）
+   * 已统一使用 Celery 版本
    */
   async createTaskSync(data: TaskCreateRequest): Promise<EvalTask> {
-    const response = await axiosInstance.post(`${API_BASE}/tasks/sync`, data, {
+    // 统一使用 Celery 版本 (POST /tasks)，不再使用简化版 (POST /tasks/sync)
+    const response = await axiosInstance.post(`${API_BASE}/tasks`, data, {
       timeout: 600000  // 10分钟超时
     });
     return response.data;

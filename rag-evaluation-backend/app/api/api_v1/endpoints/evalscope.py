@@ -107,26 +107,18 @@ async def create_task(
     
     # 提交真实的评测任务
     try:
-        # 使用优化版本的任务
+        # 使用统一版本的任务
         try:
-            from app.tasks.evalscope_tasks_optimized import run_real_evaluation_task, CELERY_AVAILABLE
+            from app.tasks.evalscope_tasks import run_real_evaluation_task, CELERY_AVAILABLE
             evaluation_task = run_real_evaluation_task
             use_fixed = False
-            print(f"✅ 使用优化版本任务，CELERY_AVAILABLE: {CELERY_AVAILABLE}")
+            print(f"✅ 使用统一版本任务，CELERY_AVAILABLE: {CELERY_AVAILABLE}")
         except ImportError as e:
-            print(f"❌ 优化版本导入失败: {e}")
-            # 回退到原版本
-            try:
-                from app.tasks.evalscope_tasks_real import run_real_evaluation_task, CELERY_AVAILABLE
-                evaluation_task = run_real_evaluation_task
-                use_fixed = False
-                print(f"✅ 使用原版本任务，CELERY_AVAILABLE: {CELERY_AVAILABLE}")
-            except ImportError as e2:
-                print(f"❌ 原版本导入失败: {e2}")
-                raise HTTPException(
-                    status_code=500,
-                    detail="所有评测任务模块都无法导入，请检查Celery配置"
-                )
+            print(f"❌ 统一版本导入失败: {e}")
+            raise HTTPException(
+                status_code=500,
+                detail="评测任务模块无法导入，请检查Celery配置"
+            )
         
         print(f"evaluation_task: {evaluation_task}")
         print(f"evaluation_task type: {type(evaluation_task)}")
@@ -371,7 +363,10 @@ async def get_task_dataset_progress(
                 }
         
         # 确定数据集状态
-        if task.status == 'completed':
+        # 优先检查该数据集是否已完成（100%）
+        if total_expected > 0 and total_completed >= total_expected:
+            dataset_status = 'completed'  # ✅ 该数据集已100%完成
+        elif task.status == 'completed':
             dataset_status = 'completed'
         elif task.status == 'running':
             dataset_status = 'running' if total_completed > 0 else 'pending'
@@ -467,6 +462,14 @@ async def pause_task(
             if not task.extra_metadata:
                 task.extra_metadata = {}
             task.extra_metadata['paused_at'] = datetime.now().isoformat()
+            
+            # 标记任务为已取消（用于Python API评测）
+            try:
+                from app.api.api_v1.endpoints.evalscope_sync import mark_task_cancelled
+                mark_task_cancelled(task_id)
+                logger.info(f"任务 {task_id} 已标记为暂停状态")
+            except Exception as e:
+                logger.warning(f"标记任务暂停状态失败: {e}")
             task.extra_metadata['terminated_processes'] = terminated_processes
             db.commit()
             
@@ -514,6 +517,14 @@ async def resume_task(
         
         # 更新任务状态
         task.status = 'running'
+        
+        # 清除取消标记（用于Python API评测）
+        try:
+            from app.api.api_v1.endpoints.evalscope_sync import unmark_task_cancelled
+            unmark_task_cancelled(task_id)
+            logger.info(f"任务 {task_id} 已清除取消标记")
+        except Exception as e:
+            logger.warning(f"清除任务取消标记失败: {e}")
         # 记录恢复时间，用于计算暂停时长
         resumed_at = datetime.now()
         task.started_at = resumed_at
@@ -532,7 +543,7 @@ async def resume_task(
         
         # 重新启动任务（使用use_cache功能）
         logger.info(f"恢复任务 {task_id}，可继续的数据集: {resumable_datasets}")
-        from app.tasks.evalscope_tasks_real import run_real_evaluation_task
+        from app.tasks.evalscope_tasks import run_real_evaluation_task
         result = run_real_evaluation_task.delay(task_id)
         
         # 更新Celery任务ID
@@ -683,7 +694,7 @@ async def continue_task(
         
         # 重新启动任务（使用use_cache功能实现断点续评）
         logger.info(f"继续评测任务 {task_id}，使用EvalScope断点续评功能")
-        from app.tasks.evalscope_tasks_real import run_real_evaluation_task
+        from app.tasks.evalscope_tasks import run_real_evaluation_task
         result = run_real_evaluation_task.delay(task_id)
         
         # 更新Celery任务ID
@@ -745,7 +756,7 @@ async def restart_task(
         
         # 重新启动任务
         logger.info(f"重新启动任务 {task_id}")
-        from app.tasks.evalscope_tasks_real import run_real_evaluation_task
+        from app.tasks.evalscope_tasks import run_real_evaluation_task
         result = run_real_evaluation_task.delay(task_id)
         
         # 更新Celery任务ID
@@ -1565,6 +1576,147 @@ async def get_task_json_reports(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"获取JSON报告失败: {str(e)}")
+
+
+@router.post("/tasks/{task_id}/import-results")
+async def import_task_results_from_json(
+    task_id: int,
+    db: Session = Depends(deps.get_db)
+):
+    """从JSON报告文件导入结果到数据库（用于修复丢失的结果）"""
+    try:
+        # 查找任务
+        task = db.query(EvalScopeTask).filter(EvalScopeTask.id == task_id).first()
+        if not task:
+            raise HTTPException(status_code=404, detail="任务不存在")
+        
+        # 查找任务对应的输出目录
+        outputs_dir = Path("outputs")
+        task_dir = outputs_dir / f"evalscope_task_{task_id}"
+        
+        if not task_dir.exists():
+            raise HTTPException(status_code=404, detail="任务输出目录不存在")
+        
+        imported_count = 0
+        skipped_count = 0
+        
+        # 查找所有JSON报告文件
+        for report_file in task_dir.glob("**/reports/**/*.json"):
+            try:
+                with open(report_file, 'r', encoding='utf-8') as f:
+                    report_data = json.load(f)
+                
+                dataset_name = report_data.get('dataset_name')
+                if not dataset_name:
+                    continue
+                
+                # 检查该数据集的结果是否已存在
+                existing = db.query(EvalScopeResult).filter(
+                    EvalScopeResult.task_id == task_id,
+                    EvalScopeResult.benchmark == dataset_name
+                ).first()
+                
+                if existing:
+                    print(f"数据集 {dataset_name} 的结果已存在，跳过")
+                    skipped_count += 1
+                    continue
+                
+                # 解析并保存结果
+                metrics = report_data.get('metrics', [])
+                for metric in metrics:
+                    metric_name = metric.get('name', 'accuracy')
+                    categories = metric.get('categories', [])
+                    
+                    if categories:
+                        for category in categories:
+                            category_name = category.get('name', ['default'])
+                            if isinstance(category_name, list):
+                                category_name = category_name[0] if category_name else 'default'
+                            
+                            subsets = category.get('subsets', [])
+                            if subsets:
+                                for subset in subsets:
+                                    result = EvalScopeResult(
+                                        task_id=task_id,
+                                        benchmark=dataset_name,
+                                        metric_name=metric_name,
+                                        metric_value=float(subset.get('score', 0)),
+                                        category=category_name,
+                                        subset_name=subset.get('name', 'main'),
+                                        num_samples=subset.get('num'),
+                                        raw_results={
+                                            'benchmark': dataset_name,
+                                            'metric_name': metric_name,
+                                            'metric_value': float(subset.get('score', 0)),
+                                            'category': category_name,
+                                            'subset_name': subset.get('name', 'main'),
+                                            'num_samples': subset.get('num')
+                                        }
+                                    )
+                                    db.add(result)
+                                    imported_count += 1
+                            else:
+                                # 没有子集，使用类别级别数据
+                                result = EvalScopeResult(
+                                    task_id=task_id,
+                                    benchmark=dataset_name,
+                                    metric_name=metric_name,
+                                    metric_value=float(category.get('score', 0)),
+                                    category=category_name,
+                                    subset_name='main',
+                                    num_samples=category.get('num'),
+                                    raw_results={
+                                        'benchmark': dataset_name,
+                                        'metric_name': metric_name,
+                                        'metric_value': float(category.get('score', 0)),
+                                        'category': category_name,
+                                        'subset_name': 'main',
+                                        'num_samples': category.get('num')
+                                    }
+                                )
+                                db.add(result)
+                                imported_count += 1
+                    else:
+                        # 没有类别，使用指标级别数据
+                        result = EvalScopeResult(
+                            task_id=task_id,
+                            benchmark=dataset_name,
+                            metric_name=metric_name,
+                            metric_value=float(metric.get('score', 0)),
+                            category='default',
+                            subset_name='main',
+                            num_samples=metric.get('num'),
+                            raw_results={
+                                'benchmark': dataset_name,
+                                'metric_name': metric_name,
+                                'metric_value': float(metric.get('score', 0)),
+                                'category': 'default',
+                                'subset_name': 'main',
+                                'num_samples': metric.get('num')
+                            }
+                        )
+                        db.add(result)
+                        imported_count += 1
+                
+            except Exception as e:
+                print(f"导入报告文件失败: {report_file}, 错误: {e}")
+                continue
+        
+        # 提交事务
+        db.commit()
+        
+        return {
+            "success": True,
+            "imported_count": imported_count,
+            "skipped_count": skipped_count,
+            "message": f"成功导入 {imported_count} 条结果，跳过 {skipped_count} 个已存在的数据集"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"导入结果失败: {str(e)}")
 
 
 # 导出ws_manager供其他模块使用

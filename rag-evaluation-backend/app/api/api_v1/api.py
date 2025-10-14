@@ -6,7 +6,7 @@ from app.api.api_v1.endpoints import (
     rag_answers, dataset_questions, performance, accuracy, admin, rag_proxy, 
     llamaindex_split,  # 重新启用 - llama_index依赖已修复
     mineru_convert, llm_proxy, user_configs, 
-    evalscope, evalscope_sync, reports, comparison,  # 添加EvalScope相关路由和报告生成
+    evalscope, reports, comparison,  # 添加EvalScope相关路由和报告生成（只使用Celery版）
     model_management,  # 新增大模型统一管理路由
     unified_models,  # 统一模型服务API
     system_health  # 系统健康检查API
@@ -30,8 +30,12 @@ api_router.include_router(llm_proxy.router, prefix="/llm", tags=["大模型转�
 api_router.include_router(user_configs.router, prefix="/user-configs", tags=["用户配置管理"])
 
 # 添加EvalScope相关路由
+# 只使用 Celery 版本（功能完整，生产级）
 api_router.include_router(evalscope.router, prefix="/evalscope", tags=["EvalScope评测"])
-api_router.include_router(evalscope_sync.router, prefix="/evalscope", tags=["EvalScope同步"])
+
+# 简化同步版本已停用 - 统一使用 Celery 版本
+# 前端请调用: POST /api/v1/evalscope/tasks (而不是 /tasks/sync)
+
 api_router.include_router(reports.router, prefix="/reports", tags=["报告生成"])
 api_router.include_router(comparison.router, prefix="/comparison", tags=["模型对比分析"])
 

@@ -9,6 +9,8 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any
+import threading
+import time
 
 from app.api import deps
 from app.schemas import evalscope as schemas
@@ -19,6 +21,25 @@ from app.models.model_config import ModelConfig
 from app.models.user import User
 
 router = APIRouter()
+
+# 全局取消状态管理
+_cancelled_tasks = set()
+_cancel_lock = threading.Lock()
+
+def check_task_cancelled(task_id: int) -> bool:
+    """检查任务是否被取消"""
+    with _cancel_lock:
+        return task_id in _cancelled_tasks
+
+def mark_task_cancelled(task_id: int):
+    """标记任务为已取消"""
+    with _cancel_lock:
+        _cancelled_tasks.add(task_id)
+
+def unmark_task_cancelled(task_id: int):
+    """取消任务取消标记"""
+    with _cancel_lock:
+        _cancelled_tasks.discard(task_id)
 
 @router.get("/models", response_model=List[Dict[str, Any]])
 async def get_user_models(
@@ -163,6 +184,9 @@ async def create_and_run_task_sync(
     task.progress = 10
     db.commit()
     
+    # 清除取消标记
+    unmark_task_cancelled(task.id)
+    
     # 刷新task对象以确保所有字段都是最新的
     db.refresh(task)
     
@@ -233,6 +257,9 @@ def run_eval_in_background(task_id: int, task_data: schemas.TaskCreate):
         
         # 使用 EvalScope Python API 而不是命令行
         try:
+            # ⚠️ 重要：必须在导入evalscope之前设置，避免多线程时的tqdm锁冲突
+            os.environ['TQDM_DISABLE'] = '1'
+            
             from evalscope.run import run_task
             from evalscope.config import TaskConfig
             
@@ -275,13 +302,29 @@ def run_eval_in_background(task_id: int, task_data: schemas.TaskCreate):
                     """运行单个数据集的评测"""
                     print(f"▶️ 开始评测数据集: {dataset_name}")
                     
+                    # 检查任务是否被取消
+                    if check_task_cancelled(task_id):
+                        print(f"⚠️ 任务 {task_id} 已被取消，停止数据集 {dataset_name} 的评测")
+                        raise Exception(f"任务被取消，数据集 {dataset_name} 评测已停止")
+                    
                     # 为每个数据集创建独立的配置
                     dataset_config = config_params.copy()
                     dataset_config['datasets'] = [dataset_name]
                     
+                    # 🔧 为每个数据集创建独立的工作目录，避免文件锁冲突
+                    dataset_work_dir = task_output_dir / dataset_name
+                    dataset_work_dir.mkdir(parents=True, exist_ok=True)
+                    dataset_config['work_dir'] = str(dataset_work_dir)
+                    print(f"🔧 [{dataset_name}] 独立工作目录: {dataset_work_dir}")
+                    
                     # 创建独立的TaskConfig
                     task_config = TaskConfig(**dataset_config)
                     result = run_task(task_config)
+                    
+                    # 再次检查任务状态
+                    if check_task_cancelled(task_id):
+                        print(f"⚠️ 任务 {task_id} 在评测过程中被取消")
+                        raise Exception(f"任务被取消，数据集 {dataset_name} 评测已停止")
                     
                     print(f"✅ 数据集 {dataset_name} 评测完成")
                     return dataset_name, result
@@ -306,8 +349,18 @@ def run_eval_in_background(task_id: int, task_data: schemas.TaskCreate):
                 print(f"🎉 所有 {len(task.datasets)} 个数据集并行评测完成")
             else:
                 # 单个数据集，使用原有逻辑
+                # 检查任务是否被取消
+                if check_task_cancelled(task_id):
+                    print(f"⚠️ 任务 {task_id} 已被取消，停止评测")
+                    raise Exception("任务被取消，评测已停止")
+                
                 task_config = TaskConfig(**config_params)
                 results = run_task(task_config)
+                
+                # 再次检查任务状态
+                if check_task_cancelled(task_id):
+                    print(f"⚠️ 任务 {task_id} 在评测过程中被取消")
+                    raise Exception("任务被取消，评测已停止")
             
             print(f"Python API 执行完成，结果数量: {len(results) if results else 0}")
             
