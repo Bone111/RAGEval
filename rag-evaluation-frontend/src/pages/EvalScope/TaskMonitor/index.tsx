@@ -480,7 +480,13 @@ const TaskMonitorPage: React.FC = () => {
           return (
             <div key={dataset} style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                <span style={{ fontWeight: 'bold' }}>{dataset}</span>
+                <span style={{ 
+                  fontWeight: 600,
+                  fontSize: '16px',
+                  color: '#1890ff'
+                }}>
+                  {dataset}
+                </span>
                 <Space>
                   <Tag color={isCompleted ? 'success' : isRunning ? 'processing' : 'default'}>
                     {isCompleted ? '已完成' : isRunning ? '进行中' : '等待中'}

@@ -121,7 +121,13 @@ const DetailedProgressComponent: React.FC<DetailedProgressProps> = ({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                   <Space>
                     {getStatusIcon(dataset.status)}
-                    <Text strong>{dataset.name}</Text>
+                    <Text strong style={{ 
+                      fontSize: '16px',
+                      color: '#1890ff',
+                      fontWeight: 600
+                    }}>
+                      {dataset.name}
+                    </Text>
                     <Tag color={getStatusColor(dataset.status)} size="small">
                       {dataset.status === 'waiting' && '等待中'}
                       {dataset.status === 'running' && '运行中'}
