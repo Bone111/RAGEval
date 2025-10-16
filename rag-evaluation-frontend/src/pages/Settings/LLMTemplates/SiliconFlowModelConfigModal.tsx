@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Button, message } from 'antd';
-import JsonEditorField from '@components/JsonEditorField';
+import JsonEditorField from '../../../components/JsonEditorField';
 import { labelWithTip } from '../utils';
-import { LLMClient, ChatCompletionMessageParam } from './llm-request';
+import { testLLMConnectivity } from '@services/llmProxyService';
 
 const API_URL = 'https://api.siliconflow.cn/v1';
 
@@ -28,6 +28,7 @@ const SiliconFlowModelConfigModal: React.FC<{
       const values = await form.validateFields();
       setLoading(true);
       message.loading('正在测试模型连通性...', 0);
+      
       let additionalParams: any = {};
       if (values.additionalParams) {
         try {
@@ -36,17 +37,16 @@ const SiliconFlowModelConfigModal: React.FC<{
           additionalParams = {};
         }
       }
-      const client = new LLMClient({
+      
+      const response = await testLLMConnectivity({
         baseUrl: API_URL,
         apiKey: values.apiKey,
         modelName: values.modelName,
-      });
-      const content = await client.chatCompletion({
-        userMessage: '你好',
         additionalParams,
       });
+      
       message.destroy();
-      message.success('连接成功！收到响应: ' + (content ? content.substring(0, 20) + '...' : '无内容'));
+      message.success('连接成功！收到响应: ' + (response ? response.substring(0, 20) + '...' : '无内容'));
       
       onSave({
         ...values,
