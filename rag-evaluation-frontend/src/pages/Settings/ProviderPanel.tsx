@@ -9,7 +9,8 @@ import RAGFlowChat from './RAGTemplates/RAGFlowChat';
 import { labelWithTip } from './utils';
 import OpenAIModelConfigModal from './LLMTemplates/OpenAIModelConfigModal';
 import SiliconFlowModelConfigModal from './LLMTemplates/SiliconFlowModelConfigModal';
-import { ConfigManager } from '@utils/configManager';
+import { ConfigManager } from '../../utils/configManager';
+import ConfigStorageStatus from '../../components/ConfigStorageStatus';
 
 const { Title } = Typography;
 
@@ -49,8 +50,6 @@ const MODEL_TEMPLATES = [
   }
 ];
 
-const LOCAL_MODEL_KEY = 'rag_eval_model_configs';
-const LOCAL_RAG_KEY = 'rag_eval_rag_configs';
 
 const cardStyle: React.CSSProperties = {
   textAlign: 'center',
@@ -118,19 +117,21 @@ const ProviderPanel: React.FC = () => {
   const [currentEditValue, setCurrentEditValue] = useState<any>({});
   const [marketOpen, setMarketOpen] = useState(true); // 控制配置市场展开/收起
 
+  // 加载配置函数
+  const loadConfigs = async () => {
+    try {
+      const models = await configManager.getAllConfigs('model');
+      const rags = await configManager.getAllConfigs('rag');
+      setModelConfigs(models);
+      setRagConfigs(rags);
+    } catch (error) {
+      console.error('加载配置失败:', error);
+      message.error('加载配置失败');
+    }
+  };
+
   // 加载配置
   useEffect(() => {
-    const loadConfigs = async () => {
-      try {
-        const models = await configManager.getAllConfigs('model');
-        const rags = await configManager.getAllConfigs('rag');
-        setModelConfigs(models);
-        setRagConfigs(rags);
-      } catch (error) {
-        console.error('加载配置失败:', error);
-        message.error('加载配置失败');
-      }
-    };
     loadConfigs();
   }, []);
 
@@ -146,6 +147,11 @@ const ProviderPanel: React.FC = () => {
 
   // 编辑模型配置
   const handleEditModel = (idx: number) => {
+    if (idx < 0 || idx >= modelConfigs.length) {
+      message.error('配置索引无效，请刷新页面重试');
+      return;
+    }
+    
     setModalType('model');
     const model = modelConfigs[idx];
     const template = MODEL_TEMPLATES.find(t => t.key === model.type) || MODEL_TEMPLATES[0];
@@ -198,8 +204,6 @@ const ProviderPanel: React.FC = () => {
 
   // 修改 handleAddRag/handleEditRag 只控制弹窗开关和传递模板/初始值
   const handleAddRag = (template: any) => {
-    console.log("template", template);
-
     setModalType('rag');
     setCurrentTemplate(template);
     setEditIndex(null);
@@ -230,12 +234,14 @@ const ProviderPanel: React.FC = () => {
     setModalOpen(true);
   };
   const handleEditRag = (idx: number) => {
+    if (idx < 0 || idx >= ragConfigs.length) {
+      message.error('配置索引无效，请刷新页面重试');
+      return;
+    }
+    
     setModalType('rag');
     const rag = ragConfigs[idx];
     const template = RAG_TEMPLATES.find(t => t.key === rag.type) || RAG_TEMPLATES[0];
-    console.log("修改 template ", template);
-    console.log("修改 rag ", rag);
-
     setCurrentTemplate(template);
     setEditIndex(idx);
     setCurrentEditValue(rag);
@@ -282,10 +288,11 @@ const ProviderPanel: React.FC = () => {
           placement="right"
           title={
             <div style={{ maxWidth: 300 }}>
-              <div style={{ marginBottom: 8, fontWeight: 500 }}>隐私说明</div>
+              <div style={{ marginBottom: 8, fontWeight: 500 }}>数据存储说明</div>
               <div style={{ color: '#fff', fontSize: 13, lineHeight: '1.5' }}>
-                <div style={{ marginBottom: 4 }}>• 所有配置（包括API密钥）仅存储在您的浏览器本地</div>
-                <div style={{ marginBottom: 4 }}>• 数据保存在您的设备上，直到主动清除</div>
+                <div style={{ marginBottom: 4 }}>• 配置优先保存到服务端，支持跨设备同步</div>
+                <div style={{ marginBottom: 4 }}>• 服务端不可用时自动降级到本地存储</div>
+                <div style={{ marginBottom: 4 }}>• 所有数据仅限当前用户访问</div>
                 <div>• 测试请求直接从浏览器发送至API服务</div>
               </div>
             </div>
@@ -300,8 +307,16 @@ const ProviderPanel: React.FC = () => {
           onConfirm={async () => {
             try {
               await configManager.clearUserConfigs();
-              setModelConfigs([]);
-              setRagConfigs([]);
+              
+              // 重置任何可能影响编辑功能的状态
+              setModalOpen(false);
+              setEditIndex(null);
+              setCurrentTemplate(null);
+              setCurrentEditValue({});
+              
+              // 重新加载配置以确保状态同步
+              await loadConfigs();
+              
               message.success('已清除所有配置');
             } catch (error) {
               console.error('清除配置失败:', error);
@@ -317,6 +332,9 @@ const ProviderPanel: React.FC = () => {
       <div style={{ marginBottom: 24, fontSize: 15, color: '#666' }}>
         在此设置模型参数和API KEY，用于【AI生成问答对】和【AI精度评测】功能。
       </div>
+      
+      {/* 配置存储状态提示 */}
+      <ConfigStorageStatus />
       {/* 已添加模型和RAG系统（合并展示） */}
       {/* <Divider orientation="left"></Divider> */}
       <div style={{ marginBottom: 12 }}>
@@ -336,8 +354,35 @@ const ProviderPanel: React.FC = () => {
                 </Col>
                 <Col>
                   <Space>
-                    <Button icon={<SettingOutlined />} onClick={() => handleEditModel(idx)}>编辑</Button>
-                    <Popconfirm title="确定删除该模型配置？" onConfirm={() => handleDeleteModel(item.id)}><Button icon={<DeleteOutlined />} danger>删除</Button></Popconfirm>
+                    <Button 
+                      icon={<SettingOutlined />} 
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        handleEditModel(idx);
+                      }}
+                    >
+                      编辑
+                    </Button>
+                    <Popconfirm 
+                      title="确定删除该模型配置？" 
+                      onConfirm={(e) => {
+                        e?.preventDefault();
+                        e?.stopPropagation();
+                        handleDeleteModel(item.id);
+                      }}
+                    >
+                      <Button 
+                        icon={<DeleteOutlined />} 
+                        danger
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                      >
+                        删除
+                      </Button>
+                    </Popconfirm>
                   </Space>
                 </Col>
               </Row>
@@ -363,8 +408,35 @@ const ProviderPanel: React.FC = () => {
                   </Col>
                   <Col>
                     <Space>
-                      <Button icon={<SettingOutlined />} onClick={() => handleEditRag(idx)}>编辑</Button>
-                      <Popconfirm title="确定删除该RAG系统配置？" onConfirm={() => handleDeleteRag(idx)}><Button icon={<DeleteOutlined />} danger>删除</Button></Popconfirm>
+                      <Button 
+                        icon={<SettingOutlined />} 
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleEditRag(idx);
+                        }}
+                      >
+                        编辑
+                      </Button>
+                      <Popconfirm 
+                        title="确定删除该RAG系统配置？" 
+                        onConfirm={(e) => {
+                          e?.preventDefault();
+                          e?.stopPropagation();
+                          handleDeleteRag(idx);
+                        }}
+                      >
+                        <Button 
+                          icon={<DeleteOutlined />} 
+                          danger
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                          }}
+                        >
+                          删除
+                        </Button>
+                      </Popconfirm>
                     </Space>
                   </Col>
                 </Row>

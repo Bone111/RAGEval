@@ -69,8 +69,8 @@ def create_tables():
             database=settings.POSTGRES_DB
         )
         
-        # 执行create_tables.sql文件
-        sql_file_path = os.path.join(os.path.dirname(__file__), 'create_tables.sql')
+        # 执行create.sql文件
+        sql_file_path = os.path.join(os.path.dirname(__file__), 'create.sql')
         run_sql_file(conn, sql_file_path)
         
         conn.close()

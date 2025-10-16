@@ -5,6 +5,9 @@ import os
 from app.core.config import settings
 from app.api.api_v1.api import api_router
 
+# 导入新增的用户配置模型，确保它们被SQLAlchemy识别
+from app.models import user_config  # noqa
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     # openapi_url=f"{settings.API_V1_STR}/openapi.json"

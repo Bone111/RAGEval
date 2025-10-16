@@ -16,7 +16,15 @@ const OpenAIModelConfigModal: React.FC<{
   useEffect(() => {
     if (open) {
       form.resetFields();
-      form.setFieldsValue(initialValues || {});
+      const values = initialValues || {};
+      // 确保additionalParams是字符串格式
+      const processedValues = {
+        ...values,
+        additionalParams: typeof values.additionalParams === 'object' 
+          ? JSON.stringify(values.additionalParams, null, 2)
+          : values.additionalParams
+      };
+      form.setFieldsValue(processedValues);
     }
   }, [open, initialValues, form]);
 
@@ -29,7 +37,9 @@ const OpenAIModelConfigModal: React.FC<{
       let additionalParams: any = {};
       if (values.additionalParams) {
         try {
-          additionalParams = JSON.parse(values.additionalParams);
+          additionalParams = typeof values.additionalParams === 'string' 
+            ? JSON.parse(values.additionalParams) 
+            : values.additionalParams;
         } catch {
           additionalParams = {};
         }
@@ -55,7 +65,23 @@ const OpenAIModelConfigModal: React.FC<{
 
   const handleOk = async () => {
     const values = await form.validateFields();
-    onSave(values);
+    
+    // 安全解析additionalParams
+    let additionalParams: any = {};
+    if (values.additionalParams) {
+      try {
+        additionalParams = typeof values.additionalParams === 'string' 
+          ? JSON.parse(values.additionalParams) 
+          : values.additionalParams;
+      } catch {
+        additionalParams = {};
+      }
+    }
+    
+    onSave({
+      ...values,
+      additionalParams
+    });
   };
   return (
     <Modal
