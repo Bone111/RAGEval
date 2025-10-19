@@ -128,3 +128,12 @@ yarg==0.1.9
 # llama-index 相关依赖
 llama-index-core>=0.12.0,<0.13.0
 llama-index>=0.12.0,<0.13.0
+
+# 文件解析相关依赖
+PyPDF2>=3.0.0
+pdfplumber>=0.7.0
+python-docx>=0.8.11
+python-pptx>=0.6.21
+pytesseract>=0.3.10
+opencv-python>=4.8.0
+Pillow>=10.0.0

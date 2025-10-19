@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { authService } from '../services/auth.service';
 import { UserConfigService } from '../services/userConfigService';
+import { api } from './api';
 
 // 配置类型定义
 export interface BaseConfig {
@@ -29,17 +30,23 @@ export interface RAGConfig extends BaseConfig {
   streamEventValue?: string;
 }
 
+export interface MinerUConfig extends BaseConfig {
+  baseUrl: string;
+  apiKey: string;
+  isActive?: boolean;
+}
+
 // 用户配置存储结构
 interface UserConfigs {
   models: ModelConfig[];
   rags: RAGConfig[];
+  mineru: MinerUConfig[];
 }
 
 export class ConfigManager {
   private static instance: ConfigManager;
   private readonly STORAGE_KEY = 'rag_eval_user_configs';
   private currentUserId: string | null = null;
-  private useServerStorage = true; // 默认使用服务端存储
   private userConfigService: UserConfigService;
 
   private constructor() {
@@ -73,10 +80,10 @@ export class ConfigManager {
   // 获取用户所有配置
   private getUserConfigs(): UserConfigs {
     if (!this.currentUserId) {
-      return { models: [], rags: [] };
+      return { models: [], rags: [], mineru: [] };
     }
     const configs = localStorage.getItem(`${this.STORAGE_KEY}_${this.currentUserId}`);
-    return configs ? JSON.parse(configs) : { models: [], rags: [] };
+    return configs ? JSON.parse(configs) : { models: [], rags: [], mineru: [] };
   }
 
   // 保存用户所有配置
@@ -88,24 +95,14 @@ export class ConfigManager {
     localStorage.setItem(`${this.STORAGE_KEY}_${this.currentUserId}`, JSON.stringify(configs));
   }
 
-  // 创建新配置 - 优先使用服务端存储
-  public async createConfig<T extends BaseConfig>(config: Omit<T, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, type: 'model' | 'rag'): Promise<T> {
-    if (this.useServerStorage) {
-      try {
-        const result = await this.createConfigOnServer(config, type);
-        console.log('服务端配置创建成功:', result);
-        return result;
-      } catch (error) {
-        console.warn('服务端存储失败，降级到本地存储:', error);
-        this.useServerStorage = false;
-      }
-    }
-    
-    // 本地存储逻辑（保持原有代码作为降级方案）
-    return this.createConfigLocally(config, type);
+  // 创建新配置 - 直接使用服务端存储
+  public async createConfig<T extends BaseConfig>(config: Omit<T, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, type: 'model' | 'rag' | 'mineru'): Promise<T> {
+    const result = await this.createConfigOnServer(config, type);
+    console.log('服务端配置创建成功:', result);
+    return result;
   }
 
-  private async createConfigOnServer<T extends BaseConfig>(config: Omit<T, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, type: 'model' | 'rag'): Promise<T> {
+  private async createConfigOnServer<T extends BaseConfig>(config: Omit<T, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, type: 'model' | 'rag' | 'mineru'): Promise<T> {
     try {
       console.log('尝试在服务端创建配置:', { type, name: config.name });
       
@@ -113,18 +110,32 @@ export class ConfigManager {
         const result = await this.userConfigService.createModelConfig(config as any);
         console.log('服务端创建模型配置成功:', result.id);
         return result as unknown as T;
-      } else {
+      } else if (type === 'rag') {
         const result = await this.userConfigService.createRAGConfig(config as any);
         console.log('服务端创建RAG配置成功:', result.id);
         return result as unknown as T;
+      } else if (type === 'mineru') {
+        // MinerU配置使用后端API
+        // 转换字段名以匹配后端schema
+        const mineruConfig = config as any;
+        const serverConfigData = {
+          name: mineruConfig.name,
+          base_url: mineruConfig.baseUrl, // 转换字段名
+          api_key: mineruConfig.apiKey,   // 转换字段名
+          is_active: mineruConfig.isActive || true
+        };
+        
+        const response = await api.post<any>('/user-configs/mineru-configs', serverConfigData);
+        console.log('服务端创建MinerU配置成功:', response);
+        return response as unknown as T;
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('服务端创建配置失败:', error);
       throw error;
     }
   }
 
-  private async createConfigLocally<T extends BaseConfig>(config: Omit<T, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, type: 'model' | 'rag'): Promise<T> {
+  private async createConfigLocally<T extends BaseConfig>(config: Omit<T, 'id' | 'userId' | 'createdAt' | 'updatedAt'>, type: 'model' | 'rag' | 'mineru'): Promise<T> {
     await this.updateCurrentUserId();
     const newConfig = {
       ...config,
@@ -137,41 +148,47 @@ export class ConfigManager {
     const userConfigs = this.getUserConfigs();
     if (type === 'model') {
       userConfigs.models.push(newConfig as unknown as ModelConfig);
-    } else {
+    } else if (type === 'rag') {
       userConfigs.rags.push(newConfig as unknown as RAGConfig);
+    } else if (type === 'mineru') {
+      userConfigs.mineru.push(newConfig as unknown as MinerUConfig);
     }
     this.saveUserConfigs(userConfigs);
     return newConfig;
   }
 
   // 更新配置
-  public async updateConfig<T extends ModelConfig | RAGConfig>(configId: string, updates: Partial<T>, type: 'model' | 'rag'): Promise<T | null> {
-    if (this.useServerStorage) {
-      try {
-        return await this.updateConfigOnServer(configId, updates, type);
-      } catch (error) {
-        console.warn('服务端更新失败，降级到本地存储:', error);
-        this.useServerStorage = false;
-      }
-    }
-    
-    return this.updateConfigLocally(configId, updates, type);
+  public async updateConfig<T extends ModelConfig | RAGConfig | MinerUConfig>(configId: string, updates: Partial<T>, type: 'model' | 'rag' | 'mineru'): Promise<T | null> {
+    return await this.updateConfigOnServer(configId, updates, type);
   }
 
-  private async updateConfigOnServer<T extends ModelConfig | RAGConfig>(configId: string, updates: Partial<T>, type: 'model' | 'rag'): Promise<T | null> {
+  private async updateConfigOnServer<T extends ModelConfig | RAGConfig | MinerUConfig>(configId: string, updates: Partial<T>, type: 'model' | 'rag' | 'mineru'): Promise<T | null> {
     if (type === 'model') {
       const result = await this.userConfigService.updateModelConfig(configId, updates as Partial<ModelConfig>);
       return result as T | null;
-    } else {
+    } else if (type === 'rag') {
       const result = await this.userConfigService.updateRAGConfig(configId, updates as Partial<RAGConfig>);
       return result as T | null;
+    } else if (type === 'mineru') {
+      // MinerU配置使用后端API
+      // 转换字段名以匹配后端schema
+      const mineruUpdates = updates as any;
+      const serverUpdateData: any = {};
+      if (mineruUpdates.name !== undefined) serverUpdateData.name = mineruUpdates.name;
+      if (mineruUpdates.baseUrl !== undefined) serverUpdateData.base_url = mineruUpdates.baseUrl;
+      if (mineruUpdates.apiKey !== undefined) serverUpdateData.api_key = mineruUpdates.apiKey;
+      if (mineruUpdates.isActive !== undefined) serverUpdateData.is_active = mineruUpdates.isActive;
+      
+      const response = await api.put<any>(`/user-configs/mineru-configs/${configId}`, serverUpdateData);
+      console.log('服务端更新MinerU配置成功:', response);
+      return response as unknown as T | null;
     }
   }
 
-  private async updateConfigLocally<T extends ModelConfig | RAGConfig>(configId: string, updates: Partial<T>, type: 'model' | 'rag'): Promise<T | null> {
+  private async updateConfigLocally<T extends ModelConfig | RAGConfig | MinerUConfig>(configId: string, updates: Partial<T>, type: 'model' | 'rag' | 'mineru'): Promise<T | null> {
     await this.updateCurrentUserId();
     const userConfigs = this.getUserConfigs();
-    const configs = type === 'model' ? userConfigs.models : userConfigs.rags;
+    const configs = type === 'model' ? userConfigs.models : type === 'rag' ? userConfigs.rags : userConfigs.mineru;
     const index = configs.findIndex(c => c.id === configId);
     
     if (index === -1) return null;
@@ -196,31 +213,27 @@ export class ConfigManager {
   }
 
   // 删除配置
-  public async deleteConfig(configId: string, type: 'model' | 'rag'): Promise<boolean> {
-    if (this.useServerStorage) {
-      try {
-        return await this.deleteConfigOnServer(configId, type);
-      } catch (error) {
-        console.warn('服务端删除失败，降级到本地存储:', error);
-        this.useServerStorage = false;
-      }
-    }
-    
-    return this.deleteConfigLocally(configId, type);
+  public async deleteConfig(configId: string, type: 'model' | 'rag' | 'mineru'): Promise<boolean> {
+    return await this.deleteConfigOnServer(configId, type);
   }
 
-  private async deleteConfigOnServer(configId: string, type: 'model' | 'rag'): Promise<boolean> {
+  private async deleteConfigOnServer(configId: string, type: 'model' | 'rag' | 'mineru'): Promise<boolean> {
     if (type === 'model') {
       return await this.userConfigService.deleteModelConfig(configId);
-    } else {
+    } else if (type === 'rag') {
       return await this.userConfigService.deleteRAGConfig(configId);
+    } else if (type === 'mineru') {
+      // MinerU配置使用后端API
+      await api.delete(`/user-configs/mineru-configs/${configId}`);
+      console.log('服务端删除MinerU配置成功');
+      return true;
     }
   }
 
-  private async deleteConfigLocally(configId: string, type: 'model' | 'rag'): Promise<boolean> {
+  private async deleteConfigLocally(configId: string, type: 'model' | 'rag' | 'mineru'): Promise<boolean> {
     await this.updateCurrentUserId();
     const userConfigs = this.getUserConfigs();
-    const configs = type === 'model' ? userConfigs.models : userConfigs.rags;
+    const configs = type === 'model' ? userConfigs.models : type === 'rag' ? userConfigs.rags : userConfigs.mineru;
     const index = configs.findIndex(c => c.id === configId);
     
     if (index === -1) return false;
@@ -231,95 +244,80 @@ export class ConfigManager {
   }
 
   // 获取配置
-  public async getConfig<T extends BaseConfig>(configId: string, type: 'model' | 'rag'): Promise<T | null> {
-    if (this.useServerStorage) {
-      try {
-        return await this.getConfigFromServer(configId, type);
-      } catch (error) {
-        console.warn('服务端获取失败，降级到本地存储:', error);
-        this.useServerStorage = false;
-      }
-    }
-    
-    return this.getConfigLocally(configId, type);
+  public async getConfig<T extends BaseConfig>(configId: string, type: 'model' | 'rag' | 'mineru'): Promise<T | null> {
+    return await this.getConfigFromServer(configId, type);
   }
 
-  private async getConfigFromServer<T extends BaseConfig>(configId: string, type: 'model' | 'rag'): Promise<T | null> {
+  private async getConfigFromServer<T extends BaseConfig>(configId: string, type: 'model' | 'rag' | 'mineru'): Promise<T | null> {
     if (type === 'model') {
       const result = await this.userConfigService.getModelConfig(configId);
       return result as unknown as T | null;
-    } else {
+    } else if (type === 'rag') {
       const result = await this.userConfigService.getRAGConfig(configId);
       return result as unknown as T | null;
+    } else if (type === 'mineru') {
+      // MinerU配置暂时使用本地存储
+      return this.getConfigLocally(configId, type);
     }
   }
 
-  private async getConfigLocally<T extends BaseConfig>(configId: string, type: 'model' | 'rag'): Promise<T | null> {
+  private async getConfigLocally<T extends BaseConfig>(configId: string, type: 'model' | 'rag' | 'mineru'): Promise<T | null> {
     await this.updateCurrentUserId();
     const userConfigs = this.getUserConfigs();
-    const configs = type === 'model' ? userConfigs.models : userConfigs.rags;
+    const configs = type === 'model' ? userConfigs.models : type === 'rag' ? userConfigs.rags : userConfigs.mineru;
     return configs.find(c => c.id === configId) as unknown as T || null;
   }
 
   // 获取所有配置
-  public async getAllConfigs<T extends BaseConfig>(type: 'model' | 'rag'): Promise<T[]> {
-    if (this.useServerStorage) {
-      try {
-        const serverConfigs = await this.getAllConfigsFromServer<T>(type);
-
-        // 如果服务端返回空列表，但本地存在配置，说明之前的同步可能失败，优先展示本地数据
-        if (serverConfigs.length === 0) {
-          const localConfigs = await this.getAllConfigsLocally<T>(type);
-          if (localConfigs.length > 0) {
-            console.warn(`服务端${type}配置为空，使用本地配置作为降级数据`);
-            return localConfigs;
-          }
-        }
-
-        console.log(`✅ 从服务端获取${type}配置成功:`, serverConfigs.length, '个');
-        return serverConfigs;
-      } catch (error) {
-        console.warn(`❌ 服务端获取${type}配置失败，降级到本地存储:`, error);
-        // 暂时降级，但不永久关闭服务端存储
-        const localConfigs = await this.getAllConfigsLocally<T>(type);
-        console.log(`📂 使用本地${type}配置:`, localConfigs.length, '个');
-        return localConfigs;
-      }
+  public async getAllConfigs<T extends BaseConfig>(type: 'model' | 'rag' | 'mineru'): Promise<T[]> {
+    try {
+      const serverConfigs = await this.getAllConfigsFromServer<T>(type);
+      console.log(`✅ 从服务端获取${type}配置成功:`, serverConfigs.length, '个');
+      return serverConfigs;
+    } catch (error) {
+      console.error(`❌ 服务端获取${type}配置失败:`, error);
+      return [];
     }
-    
-    return this.getAllConfigsLocally(type);
   }
 
-  private async getAllConfigsFromServer<T extends BaseConfig>(type: 'model' | 'rag'): Promise<T[]> {
+  private async getAllConfigsFromServer<T extends BaseConfig>(type: 'model' | 'rag' | 'mineru'): Promise<T[]> {
     if (type === 'model') {
       const result = await this.userConfigService.getModelConfigs();
       return result as unknown as T[];
-    } else {
+    } else if (type === 'rag') {
       const result = await this.userConfigService.getRAGConfigs();
       return result as unknown as T[];
+    } else if (type === 'mineru') {
+      // MinerU配置使用后端API
+      const response = await api.get<any[]>('/user-configs/mineru-configs');
+      console.log('服务端获取MinerU配置成功:', response);
+      
+      // 转换字段名以匹配前端接口
+      const convertedResponse = response.map((config: any) => ({
+        ...config,
+        baseUrl: config.base_url, // 转换字段名
+        apiKey: config.api_key,   // 转换字段名
+        isActive: config.is_active
+      }));
+      
+      return convertedResponse as unknown as T[];
     }
   }
 
-  private async getAllConfigsLocally<T extends BaseConfig>(type: 'model' | 'rag'): Promise<T[]> {
-    await this.updateCurrentUserId();
-    const userConfigs = this.getUserConfigs();
-    return (type === 'model' ? userConfigs.models : userConfigs.rags) as unknown as T[];
-  }
+
 
   // 根据名称和类型查找配置
-  public async findConfigByNameAndType(name: string, type: string, configType: 'model' | 'rag'): Promise<BaseConfig | null> {
-    if (this.useServerStorage) {
-      try {
-        return await this.userConfigService.findConfigByNameAndType(name, type, configType);
-      } catch (error) {
-        console.warn('服务端查找失败，降级到本地存储:', error);
-        this.useServerStorage = false;
-      }
+  public async findConfigByNameAndType(name: string, type: string, configType: 'model' | 'rag' | 'mineru'): Promise<BaseConfig | null> {
+    if (configType === 'mineru') {
+      // MinerU配置暂时使用本地存储
+      return this.findConfigByNameAndTypeLocally(name, type, configType);
     }
-    
-    await this.updateCurrentUserId();
+    return await this.userConfigService.findConfigByNameAndType(name, type, configType as 'model' | 'rag');
+  }
+
+  private findConfigByNameAndTypeLocally(name: string, type: string, configType: 'model' | 'rag' | 'mineru'): BaseConfig | null {
     const userConfigs = this.getUserConfigs();
-    const configs = configType === 'model' ? userConfigs.models : userConfigs.rags;
+    const configs = configType === 'model' ? userConfigs.models : configType === 'rag' ? userConfigs.rags : userConfigs.mineru;
     return configs.find(c => c.name === name && c.type === type) || null;
   }
 
@@ -327,41 +325,27 @@ export class ConfigManager {
   public async clearUserConfigs(): Promise<void> {
     if (!this.currentUserId) return;
     
-    // 优先尝试清理服务端配置
-    if (this.useServerStorage) {
-      try {
-        const result = await this.userConfigService.clearAllConfigs();
-        console.log('服务端配置清理成功:', result);
-        
-        // 服务端清理成功后，也清理本地存储
-        localStorage.removeItem(`${this.STORAGE_KEY}_${this.currentUserId}`);
-        console.log('本地配置也已清理');
-        return;
-      } catch (error) {
-        console.warn('服务端清理失败，降级到本地清理:', error);
-        // 服务端清理失败时，仍然清理本地存储
-      }
+    // 清理服务端配置
+    try {
+      const result = await this.userConfigService.clearAllConfigs();
+      console.log('服务端配置清理成功:', result);
+      
+      // 服务端清理成功后，也清理本地存储
+      localStorage.removeItem(`${this.STORAGE_KEY}_${this.currentUserId}`);
+      console.log('本地配置也已清理');
+      return;
+    } catch (error) {
+      console.warn('服务端清理失败:', error);
     }
     
-    // 清理本地存储（降级方案或本地存储模式）
+    // 清理本地存储
     localStorage.removeItem(`${this.STORAGE_KEY}_${this.currentUserId}`);
     console.log('本地配置已清理');
   }
 
   // 根据类型和名称查找RAG配置
   public async findRAGConfigByTypeAndName(type: string, name: string): Promise<RAGConfig | null> {
-    if (this.useServerStorage) {
-      try {
-        return await this.userConfigService.findRAGConfigByTypeAndName(type, name);
-      } catch (error) {
-        console.warn('服务端查找RAG配置失败，降级到本地存储:', error);
-        this.useServerStorage = false;
-      }
-    }
-    
-    await this.updateCurrentUserId();
-    const userConfigs = this.getUserConfigs();
-    return userConfigs.rags.find(c => c.type === type && c.name === name) || null;
+    return await this.userConfigService.findRAGConfigByTypeAndName(type, name);
   }
 
   // ==================== 数据迁移和同步方法 ====================
@@ -370,17 +354,12 @@ export class ConfigManager {
   public hasLocalConfigs(): boolean {
     if (!this.currentUserId) return false;
     const configs = this.getUserConfigs();
-    return configs.models.length > 0 || configs.rags.length > 0;
+    return configs.models.length > 0 || configs.rags.length > 0 || configs.mineru.length > 0;
   }
 
   // 同步本地配置到服务端
   public async syncLocalConfigsToServer(): Promise<{ success: number; failed: number; errors: string[] }> {
     const result = { success: 0, failed: 0, errors: [] as string[] };
-    
-    if (!this.useServerStorage) {
-      result.errors.push('服务端存储不可用');
-      return result;
-    }
     
     const localConfigs = this.getUserConfigs();
     
@@ -443,35 +422,20 @@ export class ConfigManager {
     return result;
   }
 
-  // 强制使用本地存储
-  public forceUseLocalStorage(): void {
-    this.useServerStorage = false;
-    console.log('已切换到本地存储模式');
-  }
-
-  // 重新尝试使用服务端存储
-  public enableServerStorage(): void {
-    this.useServerStorage = true;
-    console.log('已重新启用服务端存储');
-  }
-
-  // 获取当前存储模式
-  public getCurrentStorageMode(): 'server' | 'local' {
-    return this.useServerStorage ? 'server' : 'local';
-  }
 
   // 导出所有配置（用于备份）
-  public async exportAllConfigs(): Promise<{ models: ModelConfig[]; rags: RAGConfig[] }> {
-    const [models, rags] = await Promise.all([
+  public async exportAllConfigs(): Promise<{ models: ModelConfig[]; rags: RAGConfig[]; mineru: MinerUConfig[] }> {
+    const [models, rags, mineru] = await Promise.all([
       this.getAllConfigs<ModelConfig>('model'),
-      this.getAllConfigs<RAGConfig>('rag')
+      this.getAllConfigs<RAGConfig>('rag'),
+      this.getAllConfigs<MinerUConfig>('mineru')
     ]);
     
-    return { models, rags };
+    return { models, rags, mineru };
   }
 
   // 导入配置（从备份文件恢复）
-  public async importConfigs(configData: { models: ModelConfig[]; rags: RAGConfig[] }): Promise<{ success: number; failed: number; errors: string[] }> {
+  public async importConfigs(configData: { models: ModelConfig[]; rags: RAGConfig[]; mineru?: MinerUConfig[] }): Promise<{ success: number; failed: number; errors: string[] }> {
     const result = { success: 0, failed: 0, errors: [] as string[] };
     
     try {
@@ -501,6 +465,21 @@ export class ConfigManager {
         }
       }
       
+      // 导入MinerU配置
+      if (configData.mineru) {
+        for (const mineru of configData.mineru) {
+          try {
+            // 移除id字段，让系统生成新的id
+            const { id, ...mineruWithoutId } = mineru;
+            await this.createConfig(mineruWithoutId, 'mineru');
+            result.success++;
+          } catch (error) {
+            result.failed++;
+            result.errors.push(`MinerU配置 "${mineru.name}" 导入失败: ${error}`);
+          }
+        }
+      }
+      
       // 触发配置变化事件，通知页面刷新
       if (result.success > 0) {
         window.dispatchEvent(new CustomEvent('configChanged'));
@@ -516,14 +495,14 @@ export class ConfigManager {
   public async getDetailedStatus(): Promise<{
     storageMode: 'server' | 'local';
     userInfo: any;
-    localConfigs: { models: number; rags: number };
-    serverConfigs: { models: number; rags: number; error?: string };
+    localConfigs: { models: number; rags: number; mineru: number };
+    serverConfigs: { models: number; rags: number; mineru: number; error?: string };
   }> {
     const status = {
-      storageMode: this.getCurrentStorageMode(),
+      storageMode: 'server' as 'server' | 'local',
       userInfo: null as any,
-      localConfigs: { models: 0, rags: 0 },
-      serverConfigs: { models: 0, rags: 0, error: undefined as string | undefined }
+      localConfigs: { models: 0, rags: 0, mineru: 0 },
+      serverConfigs: { models: 0, rags: 0, mineru: 0, error: undefined as string | undefined }
     };
 
     // 获取用户信息
@@ -539,6 +518,7 @@ export class ConfigManager {
       const localUserConfigs = this.getUserConfigs();
       status.localConfigs.models = localUserConfigs.models.length;
       status.localConfigs.rags = localUserConfigs.rags.length;
+      status.localConfigs.mineru = localUserConfigs.mineru.length;
     } catch (error) {
       console.error('获取本地配置失败:', error);
     }
@@ -549,6 +529,7 @@ export class ConfigManager {
       const serverRags = await this.userConfigService.getRAGConfigs();
       status.serverConfigs.models = serverModels.length;
       status.serverConfigs.rags = serverRags.length;
+      status.serverConfigs.mineru = 0; // MinerU配置暂时使用本地存储
     } catch (error) {
       status.serverConfigs.error = error?.toString();
       console.error('获取服务端配置失败:', error);

@@ -74,3 +74,32 @@ class UserRAGConfigOut(UserRAGConfigBase):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# ==================== MinerU配置Schema ====================
+
+class UserMinerUConfigBase(BaseModel):
+    name: str = Field(..., description="配置名称")
+    base_url: str = Field(default="https://mineru.net/api/v4", description="MinerU API 地址")
+    api_key: Optional[str] = Field(None, description="API 密钥")
+    is_active: Optional[bool] = Field(default=True, description="是否启用")
+
+
+class UserMinerUConfigCreate(UserMinerUConfigBase):
+    pass
+
+
+class UserMinerUConfigUpdate(BaseModel):
+    name: Optional[str] = None
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class UserMinerUConfigOut(UserMinerUConfigBase):
+    id: str
+    user_id: str
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

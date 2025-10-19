@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Menu, Layout, Typography } from 'antd';
-import { LockOutlined, ApiOutlined, LogoutOutlined } from '@ant-design/icons';
+import { LockOutlined, ApiOutlined, LogoutOutlined, FileTextOutlined } from '@ant-design/icons';
 import ProviderPanel from './ProviderPanel';
 import PasswordPanel from './PasswordPanel';
-import { useNavigate } from 'react-router-dom';
+import MinerUPanel from './MinerUPanel';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 const { Sider, Content } = Layout;
 const { Title } = Typography;
 
 const menuItems = [
   { key: 'provider', icon: <ApiOutlined />, label: '模型供应商' },
+  { key: 'mineru', icon: <FileTextOutlined />, label: 'Mineru配置' },
   { key: 'password', icon: <LockOutlined />, label: '密码' },
   { key: 'logout', icon: <LogoutOutlined />, label: '登出' },
 ];
@@ -36,6 +38,15 @@ const contentStyle: React.CSSProperties = {
 const Settings: React.FC = () => {
   const [selectedKey, setSelectedKey] = useState('provider');
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // 从URL参数中获取要激活的选项卡
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && ['provider', 'mineru', 'password'].includes(tab)) {
+      setSelectedKey(tab);
+    }
+  }, [searchParams]);
 
   const handleMenuClick = (e: any) => {
     if (e.key === 'logout') {
@@ -61,6 +72,7 @@ const Settings: React.FC = () => {
       <Layout style={{ background: 'transparent' }}>
         <Content style={contentStyle}>
           {selectedKey === 'provider' && <ProviderPanel />}
+          {selectedKey === 'mineru' && <MinerUPanel />}
           {selectedKey === 'password' && <PasswordPanel />}
         </Content>
       </Layout>

@@ -127,7 +127,7 @@ class FileParserService:
     def _parse_pdf(self, file_path: str, **kwargs) -> str:
         """解析PDF文件"""
         if not PDF_AVAILABLE:
-            raise ImportError("PDF解析库未安装，请安装 PyPDF2 和 pdfplumber")
+            raise ImportError("PDF解析库未安装。请运行以下命令安装：\npip install PyPDF2 pdfplumber\n\n或者使用MinerU在线解析功能。")
         
         md_content = []
         md_content.append(f"# {Path(file_path).stem}\n")
@@ -181,7 +181,7 @@ class FileParserService:
     def _parse_word(self, file_path: str, **kwargs) -> str:
         """解析Word文档"""
         if not WORD_AVAILABLE:
-            raise ImportError("Word解析库未安装，请安装 python-docx")
+            raise ImportError("Word解析库未安装。请运行以下命令安装：\npip install python-docx\n\n或者使用MinerU在线解析功能。")
         
         md_content = []
         doc = Document(file_path)
@@ -235,7 +235,7 @@ class FileParserService:
     def _parse_excel(self, file_path: str, **kwargs) -> str:
         """解析Excel文件"""
         if not EXCEL_AVAILABLE:
-            raise ImportError("Excel解析库未安装，请安装 pandas 和 openpyxl")
+            raise ImportError("Excel解析库未安装。请运行以下命令安装：\npip install pandas openpyxl\n\n或者使用MinerU在线解析功能。")
         
         md_content = []
         md_content.append(f"# {Path(file_path).stem}\n")
@@ -278,7 +278,7 @@ class FileParserService:
     def _parse_powerpoint(self, file_path: str, **kwargs) -> str:
         """解析PowerPoint文件"""
         if not PPT_AVAILABLE:
-            raise ImportError("PowerPoint解析库未安装，请安装 python-pptx")
+            raise ImportError("PowerPoint解析库未安装。请运行以下命令安装：\npip install python-pptx\n\n或者使用MinerU在线解析功能。")
         
         md_content = []
         prs = Presentation(file_path)
@@ -310,7 +310,7 @@ class FileParserService:
     def _parse_image(self, file_path: str, **kwargs) -> str:
         """解析图片文件（OCR）"""
         if not OCR_AVAILABLE:
-            raise ImportError("OCR库未安装，请安装 pytesseract, PIL, opencv-python")
+            raise ImportError("OCR库未安装。请运行以下命令安装：\npip install pytesseract opencv-python\n\n注意：还需要安装Tesseract OCR引擎。\n或者使用MinerU在线解析功能。")
         
         md_content = []
         md_content.append(f"# {Path(file_path).stem}\n")
@@ -410,7 +410,7 @@ class FileParserService:
         try:
             from bs4 import BeautifulSoup
         except ImportError:
-            raise ImportError("HTML解析库未安装，请安装 beautifulsoup4")
+            raise ImportError("HTML解析库未安装。请运行以下命令安装：\npip install beautifulsoup4\n\n或者使用MinerU在线解析功能。")
         
         encoding = kwargs.get('encoding', 'utf-8')
         
@@ -497,5 +497,49 @@ class FileParserService:
                 'excel': EXCEL_AVAILABLE,
                 'powerpoint': PPT_AVAILABLE,
                 'ocr': OCR_AVAILABLE
+            },
+            'installation_guide': {
+                'pdf': 'pip install PyPDF2 pdfplumber',
+                'word': 'pip install python-docx',
+                'excel': 'pip install pandas openpyxl',
+                'powerpoint': 'pip install python-pptx',
+                'ocr': 'pip install pytesseract opencv-python\n注意：还需要安装Tesseract OCR引擎',
+                'html': 'pip install beautifulsoup4'
             }
+        }
+    
+    def get_parser_status(self) -> Dict[str, Any]:
+        """获取解析器状态"""
+        available_formats = []
+        missing_formats = []
+        
+        for ext, desc in self.supported_formats.items():
+            if ext == '.pdf' and PDF_AVAILABLE:
+                available_formats.append(f"{ext} ({desc})")
+            elif ext in ['.doc', '.docx'] and WORD_AVAILABLE:
+                available_formats.append(f"{ext} ({desc})")
+            elif ext in ['.xls', '.xlsx'] and EXCEL_AVAILABLE:
+                available_formats.append(f"{ext} ({desc})")
+            elif ext in ['.ppt', '.pptx'] and PPT_AVAILABLE:
+                available_formats.append(f"{ext} ({desc})")
+            elif ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.tif'] and OCR_AVAILABLE:
+                available_formats.append(f"{ext} ({desc})")
+            elif ext in ['.txt', '.md']:
+                available_formats.append(f"{ext} ({desc})")
+            elif ext in ['.html', '.htm']:
+                try:
+                    from bs4 import BeautifulSoup
+                    available_formats.append(f"{ext} ({desc})")
+                except ImportError:
+                    missing_formats.append(f"{ext} ({desc})")
+            else:
+                missing_formats.append(f"{ext} ({desc})")
+        
+        return {
+            'available_formats': available_formats,
+            'missing_formats': missing_formats,
+            'total_formats': len(self.supported_formats),
+            'available_count': len(available_formats),
+            'missing_count': len(missing_formats),
+            'is_fully_configured': len(missing_formats) == 0
         } 

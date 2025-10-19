@@ -9,6 +9,7 @@ from app.services.file_parser_service import FileParserService
 from app.api.deps import get_current_user
 from app.models.user import User
 from app.api.api_v1.endpoints.mineru_convert import mineru_upload_and_parse
+from app.core.config import settings
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -29,18 +30,43 @@ async def parse_file(
     支持选择使用本地解析或mineru在线API解析
     """
     try:
-        # 如果选择使用mineru且提供了token
-        if use_mineru and mineru_token:
+        # 如果选择使用mineru
+        if use_mineru:
+            # 优先使用配置的密钥，如果没有则使用传入的token
+            api_token = settings.MINERU_API_KEY or mineru_token
+            if not api_token:
+                raise HTTPException(
+                    status_code=400, 
+                    detail={
+                        "error": "MinerU API密钥未配置",
+                        "message": "请先在系统设置中配置MinerU API密钥，或联系管理员设置环境变量",
+                        "action": "configure_mineru",
+                        "redirect_to": "/settings?tab=mineru"
+                    }
+                )
+            
             # 使用mineru在线API解析
             result = await mineru_upload_and_parse(
                 file=file,
-                token=mineru_token,
+                token=api_token,
                 is_ocr=True,
                 enable_formula=False
             )
             
             if "error" in result:
-                raise HTTPException(status_code=500, detail=result["error"])
+                # 如果MinerU返回的是结构化错误，直接传递
+                if isinstance(result["error"], dict):
+                    raise HTTPException(status_code=500, detail=result["error"])
+                else:
+                    # 如果是简单字符串错误，包装成结构化错误
+                    raise HTTPException(
+                        status_code=500, 
+                        detail={
+                            "error": "MinerU解析失败",
+                            "message": result["error"],
+                            "action": "retry"
+                        }
+                    )
             
             return {
                 "success": True,
@@ -144,12 +170,33 @@ async def get_supported_formats(
             "success": True,
             "supported_formats": parser_info['supported_formats'],
             "libraries": parser_info['libraries'],
+            "installation_guide": parser_info['installation_guide'],
             "message": "获取支持格式成功"
         }
         
     except Exception as e:
         logger.error(f"获取支持格式失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"获取支持格式失败: {str(e)}")
+
+@router.get("/parser-status/")
+async def get_parser_status(
+    current_user: User = Depends(get_current_user)
+) -> Dict[str, Any]:
+    """
+    获取本地解析器状态
+    """
+    try:
+        parser_status = file_parser_service.get_parser_status()
+        
+        return {
+            "success": True,
+            "parser_status": parser_status,
+            "message": "获取解析器状态成功"
+        }
+        
+    except Exception as e:
+        logger.error(f"获取解析器状态失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"获取解析器状态失败: {str(e)}")
 
 @router.post("/batch-parse/")
 async def batch_parse_files(

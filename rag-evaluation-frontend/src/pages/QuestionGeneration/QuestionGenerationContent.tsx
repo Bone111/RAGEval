@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Button, Upload, Spin, Form, InputNumber, Select, Radio, Divider, message, Table, Progress, Alert, Checkbox, Slider, Modal, Tooltip, Input, Badge, Space, Collapse, Typography, Empty, Row, Col } from 'antd';
 import { UploadOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined, FullscreenOutlined, DeleteOutlined, EyeOutlined, WarningOutlined, InfoCircleOutlined, QuestionCircleOutlined, SettingOutlined } from '@ant-design/icons';
+import { mineruService } from '../../services/mineruService';
+import MinerUErrorAlert from '../../components/MinerUErrorAlert';
 import { useNavigate } from 'react-router-dom';
+import { authService } from '../../services/auth.service';
 import { questionGeneratorService, SplitterType, FailedRequestRecord } from '../../services/QuestionGeneratorService';
 import { TextChunk, GenerationParams, GeneratedQA, ProgressInfo } from '../../types/question-generator';
 import styles from './QuestionGeneration.module.css';
-import { ConfigManager, ModelConfig } from '@utils/configManager';
+import { ConfigManager, ModelConfig } from '../../utils/configManager';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -28,6 +31,7 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
   const [form] = Form.useForm();
 
   const [isConfigured, setIsConfigured] = useState(false);
+  const [isCheckingConfig, setIsCheckingConfig] = useState(true); // 添加配置检查状态
   const [fileList, setFileList] = useState<any[]>([]);
   const [chunks, setChunks] = useState<TextChunk[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -168,6 +172,23 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
   // 新增解析状态 state
   const [parsingStatus, setParsingStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [parsingError, setParsingError] = useState<string>('');
+  const [mineruError, setMineruError] = useState<any>(null);
+  const [mineruConfigStatus, setMineruConfigStatus] = useState<any>(null);
+  const [checkingMineruConfig, setCheckingMineruConfig] = useState(true); // 初始为true，避免闪烁
+  
+  // 解析方式选择状态
+  const [parserMode, setParserMode] = useState<'auto' | 'mineru' | 'local'>('auto');
+
+  // 监听解析模式变化，重置解析状态
+  useEffect(() => {
+    // 当解析模式改变时，重置解析状态
+    if (parsingStatus !== 'idle' || parsedFiles.length > 0) {
+      setParsingStatus('idle');
+      setParsedFiles([]);
+      setParsingError('');
+      setMineruError(null);
+    }
+  }, [parserMode]);
 
   // 添加加载可用模型的函数
   const loadAvailableModels = async () => {
@@ -179,17 +200,102 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
     }
   };
 
-  // 在组件加载时获取可用模型
+  // 检查MinerU配置状态
+  const checkMineruConfig = async () => {
+    setCheckingMineruConfig(true);
+    try {
+      const status = await mineruService.checkConfigStatus();
+      console.log('MinerU配置状态:', status);
+      setMineruConfigStatus(status);
+    } catch (error: any) {
+      console.error('检查MinerU配置失败:', error);
+      
+      // 如果是认证错误，说明用户未登录，不显示错误
+      if (error?.response?.status === 401 || error?.message?.includes('认证')) {
+        const fallbackStatus = {
+          has_config: false,
+          api_status: 'unknown' as const,
+          error_message: '需要登录后检查配置',
+          config_source: 'none' as const
+        };
+        console.log('设置认证错误状态:', fallbackStatus);
+        setMineruConfigStatus(fallbackStatus);
+      } else {
+        const fallbackStatus = {
+          has_config: false,
+          api_status: 'error' as const,
+          error_message: '检查配置失败',
+          config_source: 'none' as const
+        };
+        console.log('设置错误状态:', fallbackStatus);
+        setMineruConfigStatus(fallbackStatus);
+      }
+    } finally {
+      setCheckingMineruConfig(false);
+    }
+  };
+
+  // 在组件加载时获取可用模型和检查MinerU配置
   useEffect(() => {
     loadAvailableModels();
+    checkMineruConfig();
+  }, []);
+
+  // 监听配置变化事件，重新检查MinerU配置
+  useEffect(() => {
+    const handleConfigChange = () => {
+      console.log('检测到配置变化，重新检查MinerU配置');
+      checkMineruConfig();
+    };
+
+    window.addEventListener('configChanged', handleConfigChange);
+    
+    return () => {
+      window.removeEventListener('configChanged', handleConfigChange);
+    };
+  }, []);
+
+  // 监听大模型配置变化事件，重新检查配置状态
+  useEffect(() => {
+    const handleModelConfigChange = () => {
+      console.log('检测到大模型配置变化，重新检查配置状态');
+      const checkLLMConfig = async () => {
+        try {
+          setIsCheckingConfig(true);
+          const configManager = ConfigManager.getInstance();
+          const configs = await configManager.getAllConfigs<ModelConfig>('model');
+          setIsConfigured(configs.length > 0);
+        } catch (error) {
+          console.error('检查LLM配置失败:', error);
+          setIsConfigured(false);
+        } finally {
+          setIsCheckingConfig(false);
+        }
+      };
+      checkLLMConfig();
+    };
+
+    window.addEventListener('configChanged', handleModelConfigChange);
+    
+    return () => {
+      window.removeEventListener('configChanged', handleModelConfigChange);
+    };
   }, []);
 
   useEffect(() => {
     // 使用ConfigManager检查LLM配置
     const checkLLMConfig = async () => {
-      const configManager = ConfigManager.getInstance();
-      const configs = await configManager.getAllConfigs<ModelConfig>('model');
-      setIsConfigured(configs.length > 0);
+      try {
+        setIsCheckingConfig(true);
+        const configManager = ConfigManager.getInstance();
+        const configs = await configManager.getAllConfigs<ModelConfig>('model');
+        setIsConfigured(configs.length > 0);
+      } catch (error) {
+        console.error('检查LLM配置失败:', error);
+        setIsConfigured(false);
+      } finally {
+        setIsCheckingConfig(false);
+      }
     };
     
     checkLLMConfig();
@@ -221,26 +327,140 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
 
     try {
       const files = fileList.map(file => file.originFileObj);
-      const formData = new FormData();
-      formData.append('file', files[0]);
-      formData.append('token', 'eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiI3NDkwMjY1NiIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc1ODE2MDY3NiwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiIiwib3BlbklkIjpudWxsLCJ1dWlkIjoiOGNkYjk5YjAtNWViOC00OWU3LWJmMTktODYzNTE1ODI1ODY4IiwiZW1haWwiOiIiLCJleHAiOjE3NTkzNzAyNzZ9.c3teWoHL_R0XWY9JxxNzdE4mzVfRFAAjGfuTSdBPhX_dgKV6XLLHmb7KsSuk-7MEaS9eBcIBwayjorqAMuxbZQ');
-      formData.append('is_ocr', 'true');
-      formData.append('enable_formula', 'false');
-      const response = await fetch('/api/v1/mineru/mineru-upload-and-parse', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await response.json();
-      if (data && data.files) {
-        setParsedFiles(data.files);
-        setParsingStatus('success');
+      
+      // 根据解析方式选择不同的API
+      if (parserMode === 'local') {
+        // 使用本地解析
+        const formData = new FormData();
+        formData.append('file', files[0]);
+        formData.append('use_mineru', 'false');
+        
+        const response = await fetch('/api/v1/file-parser/parse-file/', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${authService.getToken() || ''}`
+          }
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+          // 构造与MinerU格式兼容的返回数据
+          const parsedFile = {
+            filename: data.filename,
+            success: true,
+            md_text: data.md_content,
+            extracted_files: [],
+            error_msg: null
+          };
+          setParsedFiles([parsedFile]);
+          setParsingStatus('success');
+          
+          // 本地解析成功后自动生成分块并跳转
+          message.success('文件解析成功，正在生成文本分块...');
+          const contents = [{ name: data.filename, content: data.md_content }];
+          setUploadedContents(contents);
+          
+          questionGeneratorService.processContentFiles(contents).then(processedChunks => {
+            setChunks(processedChunks);
+            setCurrentTab('chunks');
+            message.success('文本分块完成，请确认分块设置');
+          }).catch(error => {
+            message.error(`生成文本分块失败: ${(error as Error).message}`);
+            setCurrentTab('chunks'); // 即使分块失败也跳转，让用户看到错误
+          });
+        } else {
+          setParsingStatus('error');
+          let errorMessage = data.detail || '本地解析失败';
+          
+          // 检查是否是依赖缺失错误
+          if (typeof errorMessage === 'string' && errorMessage.includes('未安装')) {
+            errorMessage = `本地解析失败：${errorMessage}\n\n建议：\n1. 安装缺失的依赖库\n2. 或选择使用MinerU在线解析`;
+          }
+          
+          setParsingError(errorMessage);
+        }
       } else {
-        setParsingStatus('error');
-        setParsingError(data.error || 'mineru解析失败');
+        // 使用MinerU解析（auto或mineru模式）
+        const formData = new FormData();
+        formData.append('file', files[0]);
+        formData.append('is_ocr', 'true');
+        formData.append('enable_formula', 'false');
+        
+        const response = await fetch('/api/v1/mineru/mineru-upload-and-parse', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${authService.getToken() || ''}`
+          }
+        });
+        
+        const data = await response.json();
+        if (data && data.files) {
+          setParsedFiles(data.files);
+          setParsingStatus('success');
+          
+          // MinerU解析成功，不自动跳转，让用户查看解析结果
+          message.success('文件解析成功！可以点击"处理文件"按钮进行预览和切片');
+        } else {
+          setParsingStatus('error');
+          setParsingError(data.error || 'mineru解析失败');
+        }
       }
     } catch (err: any) {
       setParsingStatus('error');
-      setParsingError(err.message || 'mineru解析异常');
+      
+      // 如果是MinerU解析失败且是auto模式，尝试本地解析
+      if (parserMode === 'auto' && err.response?.status === 401) {
+        try {
+          message.warning('MinerU密钥无效，尝试使用本地解析...');
+          const files = fileList.map(file => file.originFileObj);
+          const formData = new FormData();
+          formData.append('file', files[0]);
+          formData.append('use_mineru', 'false');
+          
+          const response = await fetch('/api/v1/file-parser/parse-file/', {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'Authorization': `Bearer ${authService.getToken() || ''}`
+            }
+          });
+          
+          const data = await response.json();
+          if (data.success) {
+            const parsedFile = {
+              filename: data.filename,
+              success: true,
+              md_text: data.md_content,
+              extracted_files: [],
+              error_msg: null
+            };
+            setParsedFiles([parsedFile]);
+            setParsingStatus('success');
+            message.success('已自动切换到本地解析，正在生成文本分块...');
+            
+            const contents = [{ name: data.filename, content: data.md_content }];
+            setUploadedContents(contents);
+            
+            questionGeneratorService.processContentFiles(contents).then(processedChunks => {
+              setChunks(processedChunks);
+              setCurrentTab('chunks');
+              message.success('文本分块完成，请确认分块设置');
+            }).catch(error => {
+              message.error(`生成文本分块失败: ${(error as Error).message}`);
+              setCurrentTab('chunks'); // 即使分块失败也跳转，让用户看到错误
+            });
+            return;
+          }
+        } catch (localErr) {
+          console.error('本地解析也失败:', localErr);
+        }
+      }
+      
+      const parsedError = mineruService.parseError(err);
+      setMineruError(parsedError);
+      setParsingError(parsedError.message);
     }
   };
 
@@ -597,7 +817,19 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
   const renderUploadContent = () => (
     <Card title="上传文件" className={styles.card}>
       <div className={styles.uploadSection}>
-        {!isConfigured && (
+        {/* 配置检查状态 */}
+        {(isCheckingConfig || checkingMineruConfig) && (
+          <Alert
+            message="正在检查配置状态..."
+            description="请稍候，正在检查大模型API和MinerU配置状态"
+            type="info"
+            showIcon
+            style={{ marginBottom: 24 }}
+          />
+        )}
+        
+        {/* 大模型配置状态提示 */}
+        {!isCheckingConfig && !isConfigured && (
           <Alert
             message="未配置大模型API"
             description="请先配置大模型API以进行问题生成"
@@ -615,6 +847,156 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
             style={{ marginBottom: 24 }}
           />
         )}
+        
+        
+        {/* 解析方式选择 */}
+        <Card style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 16 }}>
+            <Typography.Text strong>选择解析方式：</Typography.Text>
+          </div>
+          <Radio.Group 
+            value={parserMode} 
+            onChange={(e) => setParserMode(e.target.value)}
+            style={{ marginBottom: 16 }}
+          >
+            <Radio value="auto">
+              <div>
+                <div style={{ fontWeight: 500 }}>自动选择（推荐）</div>
+                <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                  优先使用MinerU，密钥无效时自动切换到本地解析
+                </div>
+              </div>
+            </Radio>
+            <Radio value="mineru">
+              <div>
+                <div style={{ fontWeight: 500 }}>MinerU在线解析</div>
+                <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                  使用MinerU API进行高质量文档解析，需要有效密钥
+                </div>
+              </div>
+            </Radio>
+            <Radio value="local">
+              <div>
+                <div style={{ fontWeight: 500 }}>本地解析</div>
+                <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
+                  使用本地解析库，无需API密钥，支持基础格式
+                </div>
+              </div>
+            </Radio>
+          </Radio.Group>
+          
+          {/* 根据选择显示不同提示 */}
+          {parserMode === 'auto' && (
+            <Alert
+              message="自动模式说明"
+              description="系统会优先尝试MinerU解析，如果密钥无效或网络问题，会自动切换到本地解析，确保文档能够正常处理。"
+              type="info"
+              showIcon
+              style={{ marginTop: 8 }}
+            />
+          )}
+          {parserMode === 'mineru' && (
+            <>
+              {/* MinerU配置正常提示 */}
+              {mineruConfigStatus && mineruConfigStatus.has_config && mineruConfigStatus.api_status === 'valid' && (
+                <Alert
+                  message="MinerU API密钥配置正常"
+                  description={
+                    <div>
+                      <div style={{ marginBottom: 8 }}>
+                        MinerU API密钥配置正确，可以正常使用文档解析功能。
+                      </div>
+                    </div>
+                  }
+                  type="success"
+                  action={
+                    <Button 
+                      size="small"
+                      onClick={() => {
+                        console.log('手动重新检查MinerU配置');
+                        checkMineruConfig();
+                      }}
+                      loading={checkingMineruConfig}
+                    >
+                      重新检查
+                    </Button>
+                  }
+                  showIcon
+                  style={{ marginTop: 8 }}
+                />
+              )}
+              {/* MinerU配置问题提示 */}
+              {mineruConfigStatus && (!mineruConfigStatus.has_config || mineruConfigStatus.api_status !== 'valid') && (
+                <Alert
+                  message="MinerU配置问题"
+                  description={
+                    <div>
+                      <div style={{ marginBottom: 8 }}>
+                        {mineruConfigStatus.error_message?.includes('密钥为空') 
+                          ? "MinerU API密钥为空，请重新配置" 
+                          : mineruConfigStatus.error_message || "当前MinerU密钥无效或未配置"}
+                      </div>
+                      <div style={{ marginBottom: 8 }}>
+                        选择此模式可能导致解析失败，建议选择自动模式或本地解析。
+                      </div>
+                      <Space>
+                        <Button 
+                          type="primary" 
+                          size="small"
+                          onClick={() => navigate('/user/settings?tab=mineru')}
+                        >
+                          {mineruConfigStatus.error_message?.includes('密钥为空') ? '重新配置MinerU密钥' : '配置MinerU密钥'}
+                        </Button>
+                        <Button 
+                          size="small"
+                          onClick={() => {
+                            console.log('手动重新检查MinerU配置');
+                            checkMineruConfig();
+                          }}
+                          loading={checkingMineruConfig}
+                        >
+                          重新检查
+                        </Button>
+                      </Space>
+                    </div>
+                  }
+                  type="warning"
+                  showIcon
+                  style={{ marginTop: 8 }}
+                />
+              )}
+              {/* MinerU配置状态未知提示 */}
+              {mineruConfigStatus && mineruConfigStatus.api_status === 'unknown' && (
+                <Alert
+                  message="MinerU API密钥配置状态未知"
+                  description="需要登录后才能检查MinerU API密钥配置状态。登录后可以配置MinerU API密钥以获得更好的文档解析效果。"
+                  type="info"
+                  action={
+                    <Button 
+                      type="primary" 
+                      size="small"
+                      onClick={() => navigate('/login')}
+                    >
+                      去登录
+                    </Button>
+                  }
+                  showIcon
+                  style={{ marginTop: 8 }}
+                />
+              )}
+            </>
+          )}
+          {parserMode === 'local' && (
+            <Alert
+              message="本地解析说明"
+              description="本地解析支持PDF、Word、Excel、PPT等格式，但解析质量可能不如MinerU。对于复杂文档建议使用MinerU。如果遇到解析失败，请检查是否安装了相应的依赖库。"
+              type="info"
+              showIcon
+              style={{ marginTop: 8 }}
+            />
+          )}
+        </Card>
+        
         <Upload.Dragger
           multiple
           fileList={fileList}
@@ -642,7 +1024,7 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
         {parsingStatus === 'success' && (
           <Alert
             type="success"
-            message="文件解析完成！可点击下方“处理文件”进行预览和切片"
+            message={parserMode === 'local' ? "文件解析完成！点击下方'下一步'继续" : "文件解析完成！可点击下方'处理文件'进行预览和切片"}
             showIcon
             style={{ marginTop: 16, marginBottom: 8 }}
           />
@@ -659,20 +1041,31 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
             ))}
           </div>
         )}
-        {parsingStatus === 'error' && (
+        {parsingStatus === 'error' && mineruError && (
+          <MinerUErrorAlert 
+            error={mineruError} 
+            onRetry={() => {
+              setParsingStatus('idle');
+              setMineruError(null);
+              setParsingError('');
+            }}
+            style={{ marginTop: 16 }}
+          />
+        )}
+        {parsingStatus === 'error' && !mineruError && (
           <Alert type="error" message={`文件解析失败: ${parsingError}`} showIcon style={{ marginTop: 16 }} />
         )}
         <div className={styles.actionBar}>
           <Button
             type="primary"
             onClick={handleProcessFiles}
-            disabled={parsedFiles.filter(f => f.success).length === 0 || isProcessing || !isConfigured}
+            disabled={parsedFiles.filter(f => f.success).length === 0 || isProcessing || isCheckingConfig || !isConfigured}
             loading={isProcessing}
           >
-            {isProcessing ? '处理中...' : '处理文件'}
+            {isProcessing ? '处理中...' : (parserMode === 'local' ? '下一步' : '处理文件')}
           </Button>
-          {/* 仅当本地有已解析文件时显示清理缓存按钮及备注 */}
-          {parsedFiles.length > 0 && (
+          {/* 仅当本地有已解析文件且非本地解析模式时显示清理缓存按钮及备注 */}
+          {parsedFiles.length > 0 && parserMode !== 'local' && (
             <>
               <Button
                 danger

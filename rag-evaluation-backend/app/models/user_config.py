@@ -43,3 +43,17 @@ class UserRAGConfig(Base):
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class UserMinerUConfig(Base):
+    """用户MinerU配置"""
+    __tablename__ = "user_mineru_configs"
+
+    id = Column(StringUUID, primary_key=True, default=uuid.uuid4)
+    user_id = Column(StringUUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(100), nullable=False)  # 配置名称
+    base_url = Column(String(255), nullable=False, default="https://mineru.net/api/v4")
+    api_key = Column(Text, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

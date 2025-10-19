@@ -4,10 +4,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
-from app.models.user_config import UserModelConfig, UserRAGConfig
+from app.models.user_config import UserModelConfig, UserRAGConfig, UserMinerUConfig
 from app.schemas.user_config import (
     UserModelConfigCreate, UserModelConfigUpdate, UserModelConfigOut,
-    UserRAGConfigCreate, UserRAGConfigUpdate, UserRAGConfigOut
+    UserRAGConfigCreate, UserRAGConfigUpdate, UserRAGConfigOut,
+    UserMinerUConfigCreate, UserMinerUConfigUpdate, UserMinerUConfigOut
 )
 
 router = APIRouter()
@@ -305,3 +306,133 @@ def clear_all_configs(
         "deleted_model_configs": model_count,
         "deleted_rag_configs": rag_count
     }
+
+
+# ==================== MinerU配置管理 ====================
+
+@router.post("/mineru-configs", response_model=UserMinerUConfigOut)
+def create_mineru_config(
+    config_in: UserMinerUConfigCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """创建或更新用户MinerU配置（只允许一个配置）"""
+    # 查找现有配置
+    existing_config = db.query(UserMinerUConfig).filter(
+        UserMinerUConfig.user_id == current_user.id
+    ).first()
+    
+    if existing_config:
+        # 如果存在配置，直接更新
+        update_data = config_in.model_dump()
+        for field, value in update_data.items():
+            setattr(existing_config, field, value)
+        
+        db.commit()
+        db.refresh(existing_config)
+        return existing_config
+    else:
+        # 如果不存在配置，创建新配置
+        mineru_config = UserMinerUConfig(
+            user_id=current_user.id,
+            **config_in.model_dump()
+        )
+        
+        db.add(mineru_config)
+        db.commit()
+        db.refresh(mineru_config)
+        
+        return mineru_config
+
+
+@router.get("/mineru-configs", response_model=List[UserMinerUConfigOut])
+def get_mineru_configs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """获取用户所有MinerU配置"""
+    configs = db.query(UserMinerUConfig).filter(
+        UserMinerUConfig.user_id == current_user.id
+    ).all()
+    
+    return configs
+
+
+@router.get("/mineru-configs/{config_id}", response_model=UserMinerUConfigOut)
+def get_mineru_config(
+    config_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """获取指定MinerU配置"""
+    config = db.query(UserMinerUConfig).filter(
+        UserMinerUConfig.id == config_id,
+        UserMinerUConfig.user_id == current_user.id
+    ).first()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="配置不存在")
+    
+    return config
+
+
+@router.put("/mineru-configs/{config_id}", response_model=UserMinerUConfigOut)
+def update_mineru_config(
+    config_id: str,
+    config_in: UserMinerUConfigUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """更新MinerU配置"""
+    config = db.query(UserMinerUConfig).filter(
+        UserMinerUConfig.id == config_id,
+        UserMinerUConfig.user_id == current_user.id
+    ).first()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="配置不存在")
+    
+    # 检查新名称是否与其他配置冲突
+    if config_in.name and config_in.name != config.name:
+        existing = db.query(UserMinerUConfig).filter(
+            UserMinerUConfig.user_id == current_user.id,
+            UserMinerUConfig.name == config_in.name,
+            UserMinerUConfig.id != config_id
+        ).first()
+        
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"配置名称 '{config_in.name}' 已存在"
+            )
+    
+    # 更新配置
+    update_data = config_in.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(config, field, value)
+    
+    db.commit()
+    db.refresh(config)
+    
+    return config
+
+
+@router.delete("/mineru-configs/{config_id}")
+def delete_mineru_config(
+    config_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """删除MinerU配置"""
+    config = db.query(UserMinerUConfig).filter(
+        UserMinerUConfig.id == config_id,
+        UserMinerUConfig.user_id == current_user.id
+    ).first()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="配置不存在")
+    
+    db.delete(config)
+    db.commit()
+    
+    return {"message": "配置已删除"}

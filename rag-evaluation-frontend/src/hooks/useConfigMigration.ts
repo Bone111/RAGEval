@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { message, Modal } from 'antd';
 import { ConfigManager } from '../utils/configManager';
 
@@ -13,7 +13,7 @@ interface MigrationState {
   showMigrationModal: boolean;
 }
 
-export function useConfigMigration() {
+export const useConfigMigration = () => {
   const [state, setState] = useState<MigrationState>({
     hasLocalConfigs: false,
     isMigrating: false,
@@ -30,17 +30,17 @@ export function useConfigMigration() {
       setState(prev => ({ 
         ...prev, 
         hasLocalConfigs: hasLocal,
-        showMigrationModal: hasLocal && configManager.getCurrentStorageMode() === 'server'
+        showMigrationModal: hasLocal
       }));
     };
 
     checkLocalConfigs();
   }, []);
 
-  // 执行迁移
+  // 执行配置迁移
   const performMigration = async () => {
     setState(prev => ({ ...prev, isMigrating: true }));
-
+    
     try {
       const result = await configManager.syncLocalConfigsToServer();
       
@@ -48,15 +48,13 @@ export function useConfigMigration() {
         ...prev, 
         isMigrating: false,
         migrationResult: result,
-        hasLocalConfigs: result.failed > 0, // 如果有失败的，说明还有本地配置
-        showMigrationModal: false
+        showMigrationModal: false,
+        hasLocalConfigs: false
       }));
 
       if (result.failed === 0) {
-        message.success(`成功同步 ${result.success} 个配置到服务端`);
+        message.success(`配置迁移成功！同步了 ${result.success} 个配置`);
       } else {
-        message.warning(`同步完成：成功 ${result.success} 个，失败 ${result.failed} 个`);
-        // 显示详细错误信息
         Modal.warning({
           title: '部分配置同步失败',
           content: (
@@ -103,34 +101,28 @@ export function useConfigMigration() {
   // 手动触发检查迁移
   const checkMigration = () => {
     const hasLocal = configManager.hasLocalConfigs();
-    if (hasLocal && configManager.getCurrentStorageMode() === 'server') {
+    if (hasLocal) {
       setState(prev => ({ 
         ...prev, 
         hasLocalConfigs: true,
         showMigrationModal: true 
       }));
-    } else {
-      message.info('没有发现需要迁移的本地配置');
     }
   };
 
-  // 重新启用服务端存储
+  // 强制使用服务端存储
   const enableServerStorage = () => {
     configManager.enableServerStorage();
-    message.success('已重新启用服务端存储');
-    
-    // 重新检查是否需要迁移
-    const hasLocal = configManager.hasLocalConfigs();
     setState(prev => ({ 
       ...prev, 
-      hasLocalConfigs: hasLocal,
-      showMigrationModal: hasLocal
+      hasLocalConfigs: false,
+      showMigrationModal: false 
     }));
   };
 
-  // 获取当前存储模式
+  // 获取当前存储模式（现在固定为服务端存储）
   const getCurrentStorageMode = () => {
-    return configManager.getCurrentStorageMode();
+    return 'server' as 'server' | 'local';
   };
 
   // 导出配置（用于备份）
@@ -142,63 +134,86 @@ export function useConfigMigration() {
       
       const link = document.createElement('a');
       link.href = URL.createObjectURL(dataBlob);
-      link.download = `rag-eval-configs-${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(link);
+      link.download = `rag_eval_configs_${new Date().toISOString().split('T')[0]}.json`;
       link.click();
-      document.body.removeChild(link);
       
       message.success('配置导出成功');
     } catch (error) {
       message.error('配置导出失败: ' + error);
+      throw error;
     }
   };
 
-  // 导入配置（从备份文件恢复）
+  // 导入配置
   const importConfigs = async (file: File) => {
     try {
-      // 读取文件内容
       const text = await file.text();
-      const configData = JSON.parse(text);
+      const configs = JSON.parse(text);
       
-      // 验证文件格式
-      if (!configData.models || !configData.rags || !Array.isArray(configData.models) || !Array.isArray(configData.rags)) {
-        throw new Error('配置文件格式不正确');
-      }
+      await configManager.importConfigs(configs);
+      message.success('配置导入成功');
       
-      // 导入配置
-      const result = await configManager.importConfigs(configData);
-      
-      // 显示导入结果
-      if (result.failed === 0) {
-        message.success(`配置导入成功！共导入 ${result.success} 个配置`);
-      } else {
-        message.warning(`配置导入完成！成功 ${result.success} 个，失败 ${result.failed} 个`);
-        if (result.errors.length > 0) {
-          Modal.error({
-            title: '导入错误详情',
-            content: (
-              <div>
-                {result.errors.map((error, index) => (
-                  <div key={index} style={{ marginBottom: 8 }}>• {error}</div>
-                ))}
-              </div>
-            ),
-          });
-        }
-      }
-      
-      // 重新检查迁移状态
-      await checkMigration();
-      
-      // 触发配置变化事件，通知其他组件刷新
-      window.dispatchEvent(new CustomEvent('configChanged'));
-      
-      return false; // 阻止默认上传行为
+      // 重新检查本地配置状态
+      checkMigration();
     } catch (error) {
       message.error('配置导入失败: ' + error);
-      return false;
+      throw error;
     }
   };
+
+  // 迁移确认弹窗
+  const MigrationModal = () => (
+    <Modal
+      title="发现本地配置"
+      open={state.showMigrationModal}
+      onOk={performMigration}
+      onCancel={closeMigrationModal}
+      okText="同步到服务端"
+      cancelText="继续使用本地存储"
+      confirmLoading={state.isMigrating}
+      width={500}
+      footer={[
+        <button
+          key="local"
+          onClick={skipMigration}
+          style={{
+            padding: '8px 16px',
+            border: '1px solid #d9d9d9',
+            borderRadius: '6px',
+            background: '#fff',
+            cursor: 'pointer'
+          }}
+        >
+          继续使用本地存储
+        </button>,
+        <button
+          key="sync"
+          onClick={performMigration}
+          disabled={state.isMigrating}
+          style={{
+            padding: '8px 16px',
+            border: '1px solid #1890ff',
+            borderRadius: '6px',
+            background: '#1890ff',
+            color: '#fff',
+            cursor: state.isMigrating ? 'not-allowed' : 'pointer',
+            opacity: state.isMigrating ? 0.6 : 1
+          }}
+        >
+          {state.isMigrating ? '同步中...' : '同步到服务端'}
+        </button>
+      ]}
+    >
+      <div>
+        <p>🔍 检测到您有本地存储的大模型和RAG配置。</p>
+        <p>📤 <strong>同步到服务端</strong>：配置将保存到云端，不会因为清理浏览器缓存而丢失。</p>
+        <p>💾 <strong>继续使用本地存储</strong>：配置仍保存在浏览器中，清理缓存时会丢失。</p>
+        <p style={{ marginTop: 16, padding: 8, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 4 }}>
+          💡 建议选择"同步到服务端"以获得更好的数据安全性。
+        </p>
+      </div>
+    </Modal>
+  );
 
   return {
     // 状态
@@ -207,7 +222,7 @@ export function useConfigMigration() {
     migrationResult: state.migrationResult,
     showMigrationModal: state.showMigrationModal,
     
-    // 操作方法
+    // 方法
     performMigration,
     skipMigration,
     closeMigrationModal,
@@ -219,59 +234,7 @@ export function useConfigMigration() {
     
     // 迁移确认弹窗 JSX
     MigrationModal: () => (
-      <Modal
-        title="发现本地配置"
-        open={state.showMigrationModal}
-        onOk={performMigration}
-        onCancel={closeMigrationModal}
-        okText="同步到服务端"
-        cancelText="继续使用本地存储"
-        confirmLoading={state.isMigrating}
-        width={500}
-        footer={[
-          <button
-            key="local"
-            onClick={skipMigration}
-            style={{
-              marginRight: 8,
-              padding: '4px 15px',
-              border: '1px solid #d9d9d9',
-              borderRadius: '6px',
-              background: '#fff',
-              cursor: 'pointer'
-            }}
-          >
-            继续使用本地存储
-          </button>,
-          <button
-            key="sync"
-            onClick={performMigration}
-            disabled={state.isMigrating}
-            style={{
-              padding: '4px 15px',
-              border: 'none',
-              borderRadius: '6px',
-              background: '#1890ff',
-              color: '#fff',
-              cursor: state.isMigrating ? 'not-allowed' : 'pointer',
-              opacity: state.isMigrating ? 0.6 : 1
-            }}
-          >
-            {state.isMigrating ? '同步中...' : '同步到服务端'}
-          </button>
-        ]}
-      >
-        <div>
-          <p>🔍 检测到您有本地存储的大模型和RAG配置。</p>
-          <p>📤 <strong>同步到服务端</strong>：配置将保存到云端，不会因为清理浏览器缓存而丢失。</p>
-          <p>💾 <strong>继续使用本地存储</strong>：配置仍保存在浏览器中，清理缓存时会丢失。</p>
-          <p style={{ marginTop: 16, padding: 8, background: '#f6ffed', border: '1px solid #b7eb8f', borderRadius: 4 }}>
-            💡 建议选择"同步到服务端"以获得更好的数据安全性。
-          </p>
-        </div>
-      </Modal>
+      <MigrationModal />
     )
   };
-}
-
-export default useConfigMigration;
+};

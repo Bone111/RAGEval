@@ -327,33 +327,66 @@ const ProviderPanel: React.FC = () => {
           <InfoCircleOutlined style={{ color: '#8c8c8c', cursor: 'help' }} />
           </Tooltip>
         </div>
-        <Popconfirm
-          title="清除所有配置"
-          description="确定要清除所有模型和RAG系统配置吗？此操作不可恢复。"
-          onConfirm={async () => {
-            try {
-              await configManager.clearUserConfigs();
-              
-              // 重置任何可能影响编辑功能的状态
-              setModalOpen(false);
-              setEditIndex(null);
-              setCurrentTemplate(null);
-              setCurrentEditValue({});
-              
-              // 重新加载配置以确保状态同步
-              await loadConfigs();
-              
-              message.success('已清除所有配置');
-            } catch (error) {
-              console.error('清除配置失败:', error);
-              message.error('清除配置失败');
-            }
+        <Button 
+          icon={<ClearOutlined />} 
+          danger
+          onClick={() => {
+            Modal.confirm({
+              title: '⚠️ 确认清除所有配置',
+              content: (
+                <div>
+                  <p style={{ marginBottom: 16, fontSize: 16, fontWeight: 500 }}>
+                    您即将清除所有大模型和RAG系统配置
+                  </p>
+                  <div style={{ 
+                    background: '#fff2e8', 
+                    border: '1px solid #ffd591', 
+                    borderRadius: 6, 
+                    padding: 12, 
+                    marginBottom: 16 
+                  }}>
+                    <p style={{ margin: 0, color: '#d46b08', fontWeight: 500 }}>
+                      ⚠️ 此操作将删除：
+                    </p>
+                    <ul style={{ margin: '8px 0 0 20px', color: '#d46b08' }}>
+                      <li>所有大模型API配置（OpenAI、SiliconFlow、Dify等）</li>
+                      <li>所有RAG系统配置（Dify ChatFlow、RAGFlow等）</li>
+                      <li>所有API密钥和连接信息</li>
+                    </ul>
+                  </div>
+                  <p style={{ color: '#ff4d4f', fontWeight: 500 }}>
+                    🚨 此操作不可恢复，请谨慎操作！
+                  </p>
+                </div>
+              ),
+              okText: '确认清除',
+              cancelText: '取消',
+              okType: 'danger',
+              width: 500,
+              onOk: async () => {
+                try {
+                  await configManager.clearUserConfigs();
+                  
+                  // 重置任何可能影响编辑功能的状态
+                  setModalOpen(false);
+                  setEditIndex(null);
+                  setCurrentTemplate(null);
+                  setCurrentEditValue({});
+                  
+                  // 重新加载配置以确保状态同步
+                  await loadConfigs();
+                  
+                  message.success('已清除所有配置');
+                } catch (error) {
+                  console.error('清除配置失败:', error);
+                  message.error('清除配置失败');
+                }
+              }
+            });
           }}
-          okText="确定"
-          cancelText="取消"
         >
-          <Button icon={<ClearOutlined />} danger>清除所有配置</Button>
-        </Popconfirm>
+          清除所有配置
+        </Button>
       </div>
       <div style={{ marginBottom: 24, fontSize: 15, color: '#666' }}>
         在此设置模型参数和API KEY，用于【AI生成问答对】和【AI精度评测】功能。

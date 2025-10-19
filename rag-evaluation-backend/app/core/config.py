@@ -85,6 +85,9 @@ class Settings(BaseSettings):
     # Anthropic API 配置
     ANTHROPIC_API_KEY: Optional[str] = None
     
+    # MinerU API 配置
+    MINERU_API_KEY: Optional[str] = None
+    
     # 邮件服务配置
     SMTP_SERVER: str = "smtp.gmail.com"
     SMTP_PORT: int = 587

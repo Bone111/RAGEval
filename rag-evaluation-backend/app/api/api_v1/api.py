@@ -2,7 +2,7 @@ from fastapi import APIRouter
 
 from app.api.api_v1.endpoints import (
     auth, users, datasets, projects, questions,
-    rag_answers, dataset_questions, performance, accuracy, admin, rag_proxy, llamaindex_split, mineru_convert, llm_proxy, user_configs
+    rag_answers, dataset_questions, performance, accuracy, admin, rag_proxy, llamaindex_split, mineru_convert, llm_proxy, user_configs, file_parser
 )
 
 api_router = APIRouter()
@@ -21,6 +21,7 @@ api_router.include_router(llamaindex_split.router, tags=["LlamaIndex分块"])
 api_router.include_router(mineru_convert.router, prefix="/mineru", tags=["mineru"])
 api_router.include_router(llm_proxy.router, prefix="/llm", tags=["大模型转发"])
 api_router.include_router(user_configs.router, prefix="/user-configs", tags=["用户配置管理"])
+api_router.include_router(file_parser.router, prefix="/file-parser", tags=["文件解析"])
 
 @api_router.get("/health")
 def health_check():
