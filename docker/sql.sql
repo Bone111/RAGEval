@@ -18,6 +18,8 @@ create table public.users
     avatar_url    varchar(255),
     is_active     boolean                  default true,
     is_admin      boolean                  default false,
+    reset_token   varchar(255),
+    reset_token_expires timestamp with time zone,
     created_at    timestamp with time zone default now(),
     updated_at    timestamp with time zone default now()
 );
@@ -46,9 +48,13 @@ comment on column public.users.created_at is '创建时间';
 
 comment on column public.users.updated_at is '最后更新时间';
 
+comment on column public.users.reset_token is '密码重置令牌';
+
+comment on column public.users.reset_token_expires is '重置令牌过期时间';
+
 alter table public.users
     owner to postgres;
-INSERT INTO public.users VALUES ('5bddb026-0a9d-4a87-8958-d97860566dc9', 'admin@rag.com', '$2b$12$XsaDwLnTMhtvVihdFQnL8OJC6JW58x9RH47yqEThjp1IRL7Vt2Ama', 'RAGeval', 'RAGeval', NULL, NULL, true, true, '2025-03-31 01:28:56.314153+00', '2025-05-19 02:21:33.474012+00');
+INSERT INTO public.users VALUES ('5bddb026-0a9d-4a87-8958-d97860566dc9', 'admin@rag.com', '$2b$12$XsaDwLnTMhtvVihdFQnL8OJC6JW58x9RH47yqEThjp1IRL7Vt2Ama', 'RAGeval', 'RAGeval', NULL, NULL, true, true, NULL, NULL, '2025-03-31 01:28:56.314153+00', '2025-05-19 02:21:33.474012+00');
 
 create table public.api_keys
 (

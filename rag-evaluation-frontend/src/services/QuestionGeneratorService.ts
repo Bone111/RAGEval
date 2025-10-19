@@ -7,8 +7,8 @@ import {
   LLMRequestPayload
 } from '../types/question-generator';
 import { datasetService } from './dataset.service';
-import { ConfigManager, ModelConfig } from '@utils/configManager';
-import { LLMClient } from '../pages/Settings/LLMTemplates/llm-request';
+import { ConfigManager, ModelConfig } from '../utils/configManager';
+import { api } from '../utils/api';
 
 // 替换为新的导入路径
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
@@ -50,7 +50,7 @@ export class QuestionGeneratorService {
   
   // 失败记录列表
   private failedRequests: FailedRequestRecord[] = [];
-  private activeLLMClients: LLMClient[] = []; // 添加活跃的LLMClient列表
+  private activeRequests: AbortController[] = []; // 添加活跃的请求控制器列表
 
 // TODO 5. 原文依据:原文依据应该来源于原文，并不超过10个字
   
@@ -112,7 +112,7 @@ export class QuestionGeneratorService {
     this.fileSourceMap = new Map();
     // 重置失败记录
     this.failedRequests = [];
-    this.activeLLMClients = [];
+    this.activeRequests = [];
     this.isStopped = false; // 重置停止标志
   }
   
@@ -344,16 +344,16 @@ export class QuestionGeneratorService {
     const prompt = this.buildPrompt(chunk.content, params, customPromptTemplate);
 
     try {
-      // 创建LLMClient实例
-      const llmClient = await LLMClient.createFromConfigId(modelId);
-      // 添加到活跃客户端列表
-      this.activeLLMClients.push(llmClient);
+      // 创建请求控制器
+      const abortController = new AbortController();
+      // 添加到活跃请求列表
+      this.activeRequests.push(abortController);
 
       // 调用LLM API
-      const response = await this.callLLMAPI(prompt, params, llmClient);
+      const response = await this.callLLMAPI(prompt, params, modelId, abortController);
       
-      // 从活跃客户端列表中移除
-      this.activeLLMClients = this.activeLLMClients.filter(client => client !== llmClient);
+      // 从活跃请求列表中移除
+      this.activeRequests = this.activeRequests.filter(controller => controller !== abortController);
       
       // 解析响应生成问答对
       const qaPairs = this.parseResponse(response, chunk.id);
@@ -458,19 +458,55 @@ export class QuestionGeneratorService {
   }
 
   // 调用LLM API
-  private async callLLMAPI(prompt: string, params: GenerationParams, llmClient: LLMClient): Promise<string> {
+  private async callLLMAPI(prompt: string, params: GenerationParams, modelId: string, abortController: AbortController): Promise<string> {
     try {
-      // 调用LLM API
-      const response = await llmClient.chatCompletion({
-        userMessage: prompt,
-        systemMessage: '你是一个专业的问答对生成专家，擅长根据文本生成多样性高、质量优的问答对。',
-        additionalParams: {
-          temperature: 0.2,
-          max_tokens: params.maxTokens || 2048
+      // 获取模型配置
+      const configManager = ConfigManager.getInstance();
+      const config = await configManager.getConfig<ModelConfig>(modelId, 'model');
+      
+      if (!config) {
+        throw new Error('模型配置未找到');
+      }
+
+      // 解析额外参数
+      let additionalParams: any = {};
+      if (config.additionalParams) {
+        if (typeof config.additionalParams === 'string') {
+          try {
+            additionalParams = JSON.parse(config.additionalParams);
+          } catch (err) {
+            console.warn('Failed to parse additionalParams:', err);
+            additionalParams = {};
+          }
+        } else {
+          additionalParams = config.additionalParams;
         }
+      }
+
+      // 合并默认参数
+      const finalParams = {
+        temperature: 0.2,
+        max_tokens: params.maxTokens || 2048,
+        ...additionalParams
+      };
+
+      // 调用后端代理接口
+      const response = await api.post('/api/v1/llm/evaluate', {
+        base_url: config.baseUrl,
+        api_key: config.apiKey,
+        model_name: config.modelName,
+        user_message: prompt,
+        system_message: '你是一个专业的问答对生成专家，擅长根据文本生成多样性高、质量优的问答对。',
+        additional_params: finalParams
+      }, {
+        signal: abortController.signal
       });
 
-      return response;
+      if ((response as any).success) {
+        return (response as any).content;
+      } else {
+        throw new Error((response as any).message || 'LLM请求失败');
+      }
     } catch (error: any) {
       // 增强错误处理，保存更多错误信息
       if (error instanceof Error && error.name === 'AbortError') {
@@ -567,6 +603,13 @@ export class QuestionGeneratorService {
   // 中止生成过程
   public stopGeneration(): void {
     this.isStopped = true; // 设置停止标志
+    
+    // 取消所有活跃的请求
+    this.activeRequests.forEach(controller => {
+      controller.abort();
+    });
+    this.activeRequests = [];
+    
     this.progress.error = '生成已手动停止';
     this.progress.isCompleted = true;
     this.progress.completedChunks = this.progress.totalChunks;

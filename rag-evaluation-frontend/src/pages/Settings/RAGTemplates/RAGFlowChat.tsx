@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Button, Collapse, Alert, message, Typography } from 'antd';
 import { labelWithTip } from '../utils';
-import { ragRequestService } from './ragRequestService';
+import { api } from '../../../utils/api';
 import ragflowKey from './img/ragflow-key.png';
 import ragflowKey_1 from './img/ragflow_chat_1.png';
 import ragflowKey_2 from './img/ragflow_chat_2.png';
@@ -38,12 +38,12 @@ const RAGFlowChat: React.FC<RAGFlowChatProps> = ({
 
   // 同步简单配置到高级配置
   const syncConfigurations = () => {
-    const address = form.getFieldValue('address') || 'localhost:8000';
+    const address = form.getFieldValue('address') || '';
     const chatId = form.getFieldValue('chatId') || 'default-chat';
     const apiKey = form.getFieldValue('apiKey') || '';
     
-    // 自动生成完整URL
-    const fullUrl = `http://${address}/api/v1/chats_openai/${chatId}/chat/completions`;
+    // 自动生成完整URL（如果地址不为空）
+    const fullUrl = address ? `http://${address}/api/v1/chats_openai/${chatId}/chat/completions` : '';
     
     // 生成请求头
     const headers = {
@@ -87,14 +87,19 @@ const RAGFlowChat: React.FC<RAGFlowChatProps> = ({
       message.loading({ content: '正在测试连接...', key: 'testConnection' });
 
       // 4. 测试配置
-      const result = await ragRequestService.testConfig(finalValues, 'ragflow_chat');
+      const result = await api.post<{success: boolean; message: string; response?: string}>('/api/v1/llm/ragflow/test', {
+        address: finalValues.address,
+        chat_id: finalValues.chatId,
+        api_key: finalValues.apiKey,
+        test_message: "测试问题"
+      });
 
       // 5. 处理测试结果
       if (result.success) {
         message.success({ content: '测试成功!', key: 'testConnection' });
         onSave(finalValues);
       } else {
-        message.error({ content: `测试失败: ${result.error}`, key: 'testConnection' });
+        message.error({ content: `测试失败: ${result.message}`, key: 'testConnection' });
       }
     } catch (err: any) {
       // 6. 处理其他错误
@@ -137,9 +142,9 @@ const RAGFlowChat: React.FC<RAGFlowChatProps> = ({
         layout="vertical"
         initialValues={{
           name: 'RAGFlow对话',
-          address: 'localhost:8000',
+          address: '', // 移除硬编码地址，由用户配置
           chatId: 'default-chat',
-          url: 'http://localhost:8000/api/v1/chats_openai/default-chat/chat/completions',
+          url: '', // 移除硬编码URL，由用户配置
           requestHeaders: '{"Content-Type": "application/json"}',
           requestTemplate: '{"model": "model", "messages": [{"role": "user", "content": "{{question}}"}], "stream": true}',
           ...initialValues
@@ -160,7 +165,7 @@ const RAGFlowChat: React.FC<RAGFlowChatProps> = ({
           rules={[{ required: true, message: '请输入服务器地址' }]}
         >
           <Input 
-            placeholder="localhost:8000" 
+            placeholder="请输入RAGFlow服务器地址，如：localhost:8000 或 your-domain.com" 
             onChange={handleConfigChange}
           />
         </Form.Item>

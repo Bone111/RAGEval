@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Badge, Tooltip, Button, Space, message } from 'antd';
-import { CloudOutlined, LaptopOutlined, SyncOutlined, ExportOutlined } from '@ant-design/icons';
+import { Badge, Tooltip, Button, Space, message, Upload } from 'antd';
+import { CloudOutlined, LaptopOutlined, SyncOutlined, ExportOutlined, ImportOutlined } from '@ant-design/icons';
 import { ConfigManager } from '../../utils/configManager';
 import { useConfigMigration } from '../../hooks/useConfigMigration';
 import styles from './index.module.css';
@@ -61,6 +61,40 @@ const ConfigStorageIndicator: React.FC<ConfigStorageIndicatorProps> = ({
       setHasLocalConfigs(configManager.hasLocalConfigs());
     } catch (error) {
       message.error('配置迁移失败');
+    }
+  };
+
+  const handleImportConfigs = async (file: File) => {
+    try {
+      // 读取文件内容
+      const text = await file.text();
+      const configData = JSON.parse(text);
+      
+      // 验证文件格式
+      if (!configData.models || !configData.rags || !Array.isArray(configData.models) || !Array.isArray(configData.rags)) {
+        throw new Error('配置文件格式不正确');
+      }
+      
+      // 导入配置
+      const result = await configManager.importConfigs(configData);
+      
+      // 显示导入结果
+      if (result.failed === 0) {
+        message.success(`配置导入成功！共导入 ${result.success} 个配置`);
+      } else {
+        message.warning(`配置导入完成！成功 ${result.success} 个，失败 ${result.failed} 个`);
+      }
+      
+      // 重新检查状态
+      setHasLocalConfigs(configManager.hasLocalConfigs());
+      
+      // 触发配置变化事件，通知其他组件刷新
+      window.dispatchEvent(new CustomEvent('configChanged'));
+      
+      return false; // 阻止默认上传行为
+    } catch (error) {
+      message.error('配置导入失败: ' + error);
+      return false;
     }
   };
 
@@ -160,6 +194,23 @@ const ConfigStorageIndicator: React.FC<ConfigStorageIndicatorProps> = ({
                 导出
               </Button>
             </Tooltip>
+
+            {/* 导入配置 */}
+            <Upload
+              accept=".json"
+              showUploadList={false}
+              beforeUpload={handleImportConfigs}
+            >
+              <Tooltip title="导入配置备份">
+                <Button 
+                  type="link" 
+                  size="small" 
+                  icon={<ImportOutlined />}
+                >
+                  导入
+                </Button>
+              </Tooltip>
+            </Upload>
           </Space>
         )}
       </Space>

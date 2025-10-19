@@ -3,6 +3,7 @@
   max-width: 1200px;
   margin: 0 auto;
   min-height: 100%;
+  transition: opacity 0.2s ease-in-out;
 }
 
 .dashboardHeader {
@@ -132,6 +133,8 @@
   justify-content: center;
   align-items: center;
   height: 300px;
+  min-height: 300px;
+  transition: opacity 0.2s ease-in-out;
 }
 
 .projectDescription {

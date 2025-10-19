@@ -13,7 +13,7 @@ export async function testLLMConnectivity({ baseUrl, apiKey, modelName, addition
   modelName: string;
   additionalParams?: any;
 }) {
-  const data = await api.post<LLMTestResponse>('/llm/llm/test', {
+  const data = await api.post<LLMTestResponse>('/api/v1/llm/test', {
     base_url: baseUrl,
     api_key: apiKey,
     model_name: modelName,

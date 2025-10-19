@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from '../pages/Login';
+import ForgotPassword from '../pages/ForgotPassword';
+import ResetPassword from '../pages/ResetPassword';
+import ChangePassword from '../pages/ChangePassword';
 import Dashboard from '../pages/Dashboard';
 import CreateProject from '../pages/CreateProject';
 import DatasetsPage from '../pages/Datasets';
@@ -64,6 +67,8 @@ const AppRouter = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
 
         {/* 项目相关路由 */}
         <Route

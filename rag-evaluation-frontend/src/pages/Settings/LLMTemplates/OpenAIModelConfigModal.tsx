@@ -138,8 +138,13 @@ const OpenAIModelConfigModal: React.FC<{
               try { JSON.parse(value); return Promise.resolve(); } catch { return Promise.reject('请输入有效的JSON格式'); }
             }
           }]}
-          valuePropName="value"
-          getValueFromEvent={v => v}
+          normalize={(value) => {
+            // 确保值始终是字符串
+            if (typeof value === 'object' && value !== null) {
+              return JSON.stringify(value, null, 2);
+            }
+            return value || '';
+          }}
         >
           <JsonEditorField placeholder='{"temperature": 0.1}' />
         </Form.Item>

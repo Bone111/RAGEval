@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, Input, Button, message } from 'antd';
 import { labelWithTip } from '../utils';
-import JsonEditorField from '@components/JsonEditorField';
+import JsonEditorField from '../../../components/JsonEditorField';
 import { ragRequestService } from './ragRequestService';
 
 const CustomRAG: React.FC<{
@@ -16,7 +16,21 @@ const CustomRAG: React.FC<{
   useEffect(() => {
     if (open) {
       form.resetFields();
-      form.setFieldsValue(initialValues || {});
+      
+      // 处理 initialValues 中的对象字段，确保它们被转换为字符串
+      const processedValues = { ...initialValues };
+      
+      // 确保 requestHeaders 是字符串
+      if (processedValues.requestHeaders && typeof processedValues.requestHeaders === 'object') {
+        processedValues.requestHeaders = JSON.stringify(processedValues.requestHeaders, null, 2);
+      }
+      
+      // 确保 requestTemplate 是字符串
+      if (processedValues.requestTemplate && typeof processedValues.requestTemplate === 'object') {
+        processedValues.requestTemplate = JSON.stringify(processedValues.requestTemplate, null, 2);
+      }
+      
+      form.setFieldsValue(processedValues || {});
     }
   }, [open, initialValues, form]);
 
@@ -89,17 +103,29 @@ const CustomRAG: React.FC<{
             { required: true, message: '请输入请求头' },
             {
               validator: (_, value) => {
-                try {
-                  JSON.parse(value);
+                // 如果value是对象，说明normalize还没处理，跳过验证
+                if (typeof value === 'object' && value !== null) {
                   return Promise.resolve();
-                } catch {
-                  return Promise.reject('请输入有效的JSON格式');
                 }
+                // 如果value是字符串，验证JSON格式
+                if (typeof value === 'string') {
+                  try {
+                    JSON.parse(value);
+                    return Promise.resolve();
+                  } catch {
+                    return Promise.reject('请输入有效的JSON格式');
+                  }
+                }
+                return Promise.resolve();
               }
             }
           ]}
-          valuePropName="value"
-          getValueFromEvent={v => v}
+          normalize={(value) => {
+            if (typeof value === 'object' && value !== null) {
+              return JSON.stringify(value, null, 2);
+            }
+            return value || '';
+          }}
         >
           <JsonEditorField placeholder='{"Content-Type": "application/json"}'  />
         </Form.Item>
@@ -110,17 +136,29 @@ const CustomRAG: React.FC<{
             { required: true, message: '请输入请求体' },
             {
               validator: (_, value) => {
-                try {
-                  JSON.parse(value);
+                // 如果value是对象，说明normalize还没处理，跳过验证
+                if (typeof value === 'object' && value !== null) {
                   return Promise.resolve();
-                } catch {
-                  return Promise.reject('请输入有效的JSON格式');
                 }
+                // 如果value是字符串，验证JSON格式
+                if (typeof value === 'string') {
+                  try {
+                    JSON.parse(value);
+                    return Promise.resolve();
+                  } catch {
+                    return Promise.reject('请输入有效的JSON格式');
+                  }
+                }
+                return Promise.resolve();
               }
             }
           ]}
-          valuePropName="value"
-          getValueFromEvent={v => v}
+          normalize={(value) => {
+            if (typeof value === 'object' && value !== null) {
+              return JSON.stringify(value, null, 2);
+            }
+            return value || '';
+          }}
         >
           <JsonEditorField placeholder='{"query": "{{question}}"}'  />
         </Form.Item>

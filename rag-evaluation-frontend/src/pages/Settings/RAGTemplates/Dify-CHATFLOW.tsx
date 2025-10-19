@@ -122,7 +122,7 @@ const DifyChatflow: React.FC<{
         form={form}
         layout="vertical"
         initialValues={{
-          url: 'https://api.dify.ai/v1/chat-messages',
+          url: '', // 移除硬编码地址，由用户配置
           requestHeaders: '{"Content-Type": "application/json"}',
           requestTemplate: '{"inputs": {}, "query": "{{question}}", "response_mode": "streaming", "conversation_id": "", "user": "user"}',
           responsePath: 'answer',
@@ -136,7 +136,7 @@ const DifyChatflow: React.FC<{
           <Input placeholder="Dify-Chatflow" />
         </Form.Item>
         <Form.Item name="url" label={labelWithTip('API接口地址', 'Dify的API接口地址')} rules={[{ required: true, message: '请输入API接口地址' }]}>
-          <Input placeholder="https://api.dify.ai/v1/chat-messages" />
+          <Input placeholder="请输入Dify API地址，如：https://api.dify.ai/v1/chat-messages" />
         </Form.Item>
         <Form.Item name="apiKey" label={labelWithTip('API密钥', 'Dify的API密钥，修改后会自动同步到下方高级配置中')} rules={[{ required: true, message: '请输入API密钥' }]}>
           <Input.Password 

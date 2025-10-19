@@ -39,7 +39,7 @@ const MODEL_TEMPLATES = [
     logo: '/llm_logo/siliconflow_logo.png', // 需准备logo
     defaultConfig: {
       name: '硅基流动',
-      baseUrl: 'https://api.siliconflow.cn',
+      baseUrl: '', // 移除硬编码地址，由用户配置
       apiKey: '',
       modelName: 'Qwen/QwQ-32B',
       additionalParams: `{
@@ -135,6 +135,20 @@ const ProviderPanel: React.FC = () => {
     loadConfigs();
   }, []);
 
+  // 监听配置变化（用于导入后自动刷新）
+  useEffect(() => {
+    const handleConfigChange = () => {
+      loadConfigs();
+    };
+
+    // 监听自定义事件
+    window.addEventListener('configChanged', handleConfigChange);
+    
+    return () => {
+      window.removeEventListener('configChanged', handleConfigChange);
+    };
+  }, []);
+
   // 添加模型
   const handleAddModel = (tplKey = 'openai') => {
     setModalType('model');
@@ -183,6 +197,9 @@ const ProviderPanel: React.FC = () => {
       setEditIndex(null);
       setModalOpen(false);
       message.success('模型配置已保存');
+      
+      // 触发配置变化事件，通知其他组件刷新
+      window.dispatchEvent(new CustomEvent('configChanged'));
     } catch (error) {
       console.error('保存配置失败:', error);
       message.error('保存配置失败');
@@ -195,6 +212,9 @@ const ProviderPanel: React.FC = () => {
       if (await configManager.deleteConfig(configId, 'model')) {
         setModelConfigs(prev => prev.filter(c => c.id !== configId));
         message.success('已删除模型配置');
+        
+        // 触发配置变化事件，通知其他组件刷新
+        window.dispatchEvent(new CustomEvent('configChanged'));
       }
     } catch (error) {
       console.error('删除配置失败:', error);
@@ -213,21 +233,21 @@ const ProviderPanel: React.FC = () => {
       defaultConfig = {
         ...defaultConfig,
         name: 'Dify-Chatflow',
-        url: 'http://localhost/v1/chat-messages',
+        url: '', // 移除硬编码地址，由用户配置
       };
     }
     if (template.key === 'dify_flow') {
       defaultConfig = {
         ...defaultConfig,
         name: 'Dify-工作流',
-        url: 'http://localhost/v1/workflows/run',
+        url: '', // 移除硬编码地址，由用户配置
       };
     }
     if (template.key === 'ragflow'){
       defaultConfig = {
         ...defaultConfig,
         name: 'RAGFlow-Chat',
-        url: 'http://localhost/v1/workflows/run',
+        url: '', // 移除硬编码地址，由用户配置
       };
     }
     setCurrentEditValue(defaultConfig);
@@ -253,6 +273,9 @@ const ProviderPanel: React.FC = () => {
     configManager.deleteConfig(ragConfigs[idx].id, 'rag');
     setRagConfigs(newList);
     message.success('已删除RAG系统配置');
+    
+    // 触发配置变化事件，通知其他组件刷新
+    window.dispatchEvent(new CustomEvent('configChanged'));
   };
 
   // 新增rag保存回调
@@ -271,6 +294,9 @@ const ProviderPanel: React.FC = () => {
       setRagConfigs(newList);
       setModalOpen(false);
       message.success('RAG系统配置已保存');
+      
+      // 触发配置变化事件，通知其他组件刷新
+      window.dispatchEvent(new CustomEvent('configChanged'));
     } catch (error) {
       console.error('保存RAG配置失败:', error);
       message.error('保存配置失败');

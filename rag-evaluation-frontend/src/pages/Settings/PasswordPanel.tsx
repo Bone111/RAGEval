@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Form, Input, Button, message } from 'antd';
-import { updateCurrentUserPassword } from '../../services/auth.service';
+import { authService } from '../../services/auth.service';
 
 const PasswordPanel: React.FC = () => {
   const [form] = Form.useForm();
@@ -9,7 +9,7 @@ const PasswordPanel: React.FC = () => {
   const onFinish = async (values: any) => {
     setLoading(true);
     try {
-      await updateCurrentUserPassword(values.newPassword);
+      await authService.changePassword(values.currentPassword, values.newPassword);
       message.success('密码修改成功');
       form.resetFields();
     } catch (err: any) {

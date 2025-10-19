@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, Button, Space, Badge, Modal, message } from 'antd';
-import { CloudOutlined, LaptopOutlined, SyncOutlined, ExportOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Alert, Button, Space, Badge, Modal, message, Upload } from 'antd';
+import { CloudOutlined, LaptopOutlined, SyncOutlined, ExportOutlined, ReloadOutlined, ImportOutlined } from '@ant-design/icons';
 import { ConfigManager } from '../utils/configManager';
 
 const ConfigStorageStatus: React.FC = () => {
@@ -122,6 +122,56 @@ const ConfigStorageStatus: React.FC = () => {
     }
   };
 
+  const handleImportConfigs = async (file: File) => {
+    try {
+      setIsLoading(true);
+      
+      // 读取文件内容
+      const text = await file.text();
+      const configData = JSON.parse(text);
+      
+      // 验证文件格式
+      if (!configData.models || !configData.rags || !Array.isArray(configData.models) || !Array.isArray(configData.rags)) {
+        throw new Error('配置文件格式不正确');
+      }
+      
+      // 导入配置
+      const result = await configManager.importConfigs(configData);
+      
+      // 显示导入结果
+      if (result.failed === 0) {
+        message.success(`配置导入成功！共导入 ${result.success} 个配置`);
+      } else {
+        message.warning(`配置导入完成！成功 ${result.success} 个，失败 ${result.failed} 个`);
+        if (result.errors.length > 0) {
+          Modal.error({
+            title: '导入错误详情',
+            content: (
+              <div>
+                {result.errors.map((error, index) => (
+                  <div key={index} style={{ marginBottom: 8 }}>• {error}</div>
+                ))}
+              </div>
+            ),
+          });
+        }
+      }
+      
+      // 刷新状态
+      await checkStatus();
+      
+      // 触发配置变化事件，通知其他组件刷新
+      window.dispatchEvent(new CustomEvent('configChanged'));
+      
+      return false; // 阻止默认上传行为
+    } catch (error) {
+      message.error('配置导入失败: ' + error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const getStatusInfo = () => {
     if (serverStatus === 'disconnected') {
       return {
@@ -237,10 +287,38 @@ const ConfigStorageStatus: React.FC = () => {
                 导出
               </Button>
               
+              <Upload
+                accept=".json"
+                showUploadList={false}
+                beforeUpload={handleImportConfigs}
+                disabled={isLoading}
+              >
+                <Button 
+                  size="small" 
+                  icon={<ImportOutlined />}
+                  loading={isLoading}
+                >
+                  导入
+                </Button>
+              </Upload>
+              
               <Button 
                 size="small" 
                 icon={<ReloadOutlined />}
-                onClick={checkStatus}
+                onClick={async () => {
+                  setIsLoading(true);
+                  try {
+                    await checkStatus();
+                    // 触发配置变化事件，通知其他组件刷新
+                    window.dispatchEvent(new CustomEvent('configChanged'));
+                    message.success('状态已刷新');
+                  } catch (error) {
+                    message.error('刷新失败: ' + error);
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                loading={isLoading}
               >
                 刷新状态
               </Button>

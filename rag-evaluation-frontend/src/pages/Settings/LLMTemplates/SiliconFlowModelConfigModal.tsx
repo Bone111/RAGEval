@@ -4,7 +4,7 @@ import JsonEditorField from '../../../components/JsonEditorField';
 import { labelWithTip } from '../utils';
 import { testLLMConnectivity } from '@services/llmProxyService';
 
-const API_URL = 'https://api.siliconflow.cn/v1';
+// 移除硬编码API地址，由用户配置
 
 const SiliconFlowModelConfigModal: React.FC<{
   open: boolean;
@@ -49,7 +49,7 @@ const SiliconFlowModelConfigModal: React.FC<{
       }
       
       const response = await testLLMConnectivity({
-        baseUrl: API_URL,
+        baseUrl: values.baseUrl,
         apiKey: values.apiKey,
         modelName: values.modelName,
         additionalParams,
@@ -60,7 +60,6 @@ const SiliconFlowModelConfigModal: React.FC<{
       
       onSave({
         ...values,
-        baseUrl: API_URL,
         additionalParams
       });
     } catch (err: any) {
@@ -88,7 +87,6 @@ const SiliconFlowModelConfigModal: React.FC<{
     
     onSave({
       ...values,
-      baseUrl: API_URL,
       additionalParams
     });
   };
@@ -118,6 +116,13 @@ const SiliconFlowModelConfigModal: React.FC<{
           <Input placeholder="如：硅基流动" />
         </Form.Item>
         <Form.Item
+          name="baseUrl"
+          label={labelWithTip('BASE_URL', '硅基流动API的基础URL')}
+          rules={[{ required: true, message: '请输入BASE_URL' }]}
+        >
+          <Input placeholder="https://api.siliconflow.cn/v1" />
+        </Form.Item>
+        <Form.Item
           name="apiKey"
           label={labelWithTip('API_KEY', '硅基流动的API密钥')}
           rules={[{ required: true, message: '请输入API密钥' }]}>
@@ -138,8 +143,13 @@ const SiliconFlowModelConfigModal: React.FC<{
               try { JSON.parse(value); return Promise.resolve(); } catch { return Promise.reject('请输入有效的JSON格式'); }
             }
           }]}
-          valuePropName="value"
-          getValueFromEvent={v => v}
+          normalize={(value) => {
+            // 确保值始终是字符串
+            if (typeof value === 'object' && value !== null) {
+              return JSON.stringify(value, null, 2);
+            }
+            return value || '';
+          }}
         >
           <JsonEditorField placeholder='{"temperature": 0.7, "max_tokens": 2048}'/>
         </Form.Item>

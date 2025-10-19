@@ -1,73 +1,93 @@
+# RAG评测系统 Docker Compose 配置文件
+# 定义整个项目的名称为 rag-evaluation
 name: rag-evaluation
 
+# 服务定义部分
 services:
   # PostgreSQL数据库服务
+  # 提供数据持久化存储，存储用户、项目、数据集、评测结果等数据
   database:
-    image: postgres:14
-    container_name: rag-eval-db
+    image: postgres:14                    # 使用PostgreSQL 14版本镜像
+    container_name: rag-eval-db           # 容器名称
     volumes:
+      # 数据持久化：将PostgreSQL数据目录挂载到宿主机
       - postgres_data:/var/lib/postgresql/data/
+      # 初始化脚本：容器启动时自动执行SQL初始化脚本
       - ./sql.sql:/docker-entrypoint-initdb.d/init.sql
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=rag_evaluation
+      - POSTGRES_USER=postgres            # 数据库用户名
+      - POSTGRES_PASSWORD=postgres        # 数据库密码
+      - POSTGRES_DB=rag_evaluation        # 数据库名称
     ports:
-      - "5432:5432"
+      - "5432:5432"                       # 暴露数据库端口到宿主机
     healthcheck:
+      # 健康检查：确保数据库服务正常运行
       test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
+      interval: 5s                        # 每5秒检查一次
+      timeout: 5s                         # 超时时间5秒
+      retries: 5                          # 重试5次
+    restart: unless-stopped               # 自动重启策略
       
   # FastAPI后端服务
+  # 提供REST API接口，处理业务逻辑和数据交互
   backend:
     build: 
-      context: ..
-      dockerfile: docker/Dockerfile.backend
-    container_name: rag-eval-backend
-    volumes:
-      - ../rag-evaluation-backend:/app
+      context: ..                         # 构建上下文：项目根目录
+      dockerfile: docker/Dockerfile.backend  # 后端Dockerfile路径
+    container_name: rag-eval-backend      # 容器名称
+    # volumes:
+      # 开发模式：将后端代码目录挂载到容器，支持热重载
+      # 注意：启用此挂载会覆盖镜像中的代码，使用宿主机代码
+      # - ../rag-evaluation-backend:/app
     environment:
+      # 数据库连接URL：连接到PostgreSQL数据库
       - DATABASE_URL=postgresql://postgres:postgres@database:5432/rag_evaluation
-      - POSTGRES_SERVER=database
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_SERVER=database          # 数据库服务器地址
+      - POSTGRES_USER=postgres            # 数据库用户名
+      - POSTGRES_PASSWORD=postgres        # 数据库密码
     ports:
-      - "8000:8000"
+      - "8000:8000"                       # 暴露后端API端口到宿主机
     depends_on:
       database:
-        condition: service_healthy
+        condition: service_healthy        # 等待数据库健康检查通过后启动
+    # 启动命令：使用uvicorn运行FastAPI应用，支持热重载
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
-    restart: unless-stopped
+    restart: unless-stopped               # 自动重启策略
       
   # Caddy Web服务器
+  # 提供前端静态文件服务和反向代理，处理HTTPS证书
   caddy:
     build:
-      context: ..
-      dockerfile: docker/Dockerfile.caddy
-    container_name: rag-eval-caddy
+      context: ..                         # 构建上下文：项目根目录
+      dockerfile: docker/Dockerfile.caddy # Caddy Dockerfile路径
+    container_name: rag-eval-caddy        # 容器名称
     volumes:
+      # Caddy配置文件：只读挂载
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Caddy数据目录：存储证书等数据
       - caddy_data:/data
+      # Caddy配置目录：存储配置数据
       - caddy_config:/config
+      # Caddy日志目录：存储访问日志
       - caddy_logs:/var/log/caddy
     ports:
-      - "80:80"        # HTTP端口
-      - "443:443"      # HTTPS端口
+      - "5173:80"                         # HTTP端口：前端开发服务器端口
+      - "443:443"                         # HTTPS端口：生产环境HTTPS服务
     depends_on:
-      - backend
+      - backend                           # 依赖后端服务启动
     environment:
+      # 前端API地址：告诉前端应用后端API的位置
       - REACT_APP_API_URL=http://localhost:8000
-    restart: unless-stopped
+    restart: unless-stopped               # 自动重启策略
 
+# 数据卷定义
+# 用于数据持久化，确保容器重启后数据不丢失
 volumes:
-  postgres_data:
-    name: rag-eval-postgres-data
-  caddy_data:
-    name: rag-eval-caddy-data
-  caddy_config:
-    name: rag-eval-caddy-config
-  caddy_logs:
-    name: rag-eval-caddy-logs
+  postgres_data:                          # PostgreSQL数据卷
+    name: rag-eval-postgres-data          # 数据卷名称
+  caddy_data:                             # Caddy数据卷
+    name: rag-eval-caddy-data             # 数据卷名称
+  caddy_config:                           # Caddy配置卷
+    name: rag-eval-caddy-config           # 数据卷名称
+  caddy_logs:                             # Caddy日志卷
+    name: rag-eval-caddy-logs             # 数据卷名称

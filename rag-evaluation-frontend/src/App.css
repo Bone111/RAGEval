@@ -33,6 +33,31 @@ body, html {
   overflow: hidden;
 }
 
+/* 路由切换过渡动画 */
+.route-transition {
+  transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+}
+
+.route-transition-enter {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.route-transition-enter-active {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.route-transition-exit {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.route-transition-exit-active {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
 .logo {
   height: 6em;
   padding: 1.5em;

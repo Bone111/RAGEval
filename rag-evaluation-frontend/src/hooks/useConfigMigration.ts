@@ -153,6 +153,53 @@ export function useConfigMigration() {
     }
   };
 
+  // 导入配置（从备份文件恢复）
+  const importConfigs = async (file: File) => {
+    try {
+      // 读取文件内容
+      const text = await file.text();
+      const configData = JSON.parse(text);
+      
+      // 验证文件格式
+      if (!configData.models || !configData.rags || !Array.isArray(configData.models) || !Array.isArray(configData.rags)) {
+        throw new Error('配置文件格式不正确');
+      }
+      
+      // 导入配置
+      const result = await configManager.importConfigs(configData);
+      
+      // 显示导入结果
+      if (result.failed === 0) {
+        message.success(`配置导入成功！共导入 ${result.success} 个配置`);
+      } else {
+        message.warning(`配置导入完成！成功 ${result.success} 个，失败 ${result.failed} 个`);
+        if (result.errors.length > 0) {
+          Modal.error({
+            title: '导入错误详情',
+            content: (
+              <div>
+                {result.errors.map((error, index) => (
+                  <div key={index} style={{ marginBottom: 8 }}>• {error}</div>
+                ))}
+              </div>
+            ),
+          });
+        }
+      }
+      
+      // 重新检查迁移状态
+      await checkMigration();
+      
+      // 触发配置变化事件，通知其他组件刷新
+      window.dispatchEvent(new CustomEvent('configChanged'));
+      
+      return false; // 阻止默认上传行为
+    } catch (error) {
+      message.error('配置导入失败: ' + error);
+      return false;
+    }
+  };
+
   return {
     // 状态
     hasLocalConfigs: state.hasLocalConfigs,
@@ -167,6 +214,7 @@ export function useConfigMigration() {
     checkMigration,
     enableServerStorage,
     exportConfigs,
+    importConfigs,
     getCurrentStorageMode,
     
     // 迁移确认弹窗 JSX

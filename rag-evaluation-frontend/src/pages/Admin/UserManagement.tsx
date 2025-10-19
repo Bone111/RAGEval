@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Table, Input, Space, Tag, Typography, Spin } from 'antd';
-import { SearchOutlined } from '@ant-design/icons';
+import { Table, Input, Space, Tag, Typography, Spin, Button, Modal, Form, message } from 'antd';
+import { SearchOutlined, KeyOutlined } from '@ant-design/icons';
 import { adminService } from '../../services/admin.service';
 
 const { Title } = Typography;
@@ -20,6 +20,9 @@ const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [searchText, setSearchText] = useState<string>('');
+  const [resetPasswordModalVisible, setResetPasswordModalVisible] = useState<boolean>(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
+  const [resetPasswordForm] = Form.useForm();
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -35,6 +38,33 @@ const UserManagement: React.FC = () => {
 
     fetchUsers();
   }, []);
+
+  const handleResetPassword = (user: User) => {
+    setSelectedUser(user);
+    setResetPasswordModalVisible(true);
+    resetPasswordForm.resetFields();
+  };
+
+  const handleResetPasswordSubmit = async (values: { newPassword: string; confirmPassword: string }) => {
+    if (values.newPassword !== values.confirmPassword) {
+      message.error('两次输入的密码不一致');
+      return;
+    }
+
+    if (!selectedUser) return;
+
+    try {
+      await adminService.resetUserPassword(selectedUser.id, values.newPassword);
+      setResetPasswordModalVisible(false);
+      setSelectedUser(null);
+      resetPasswordForm.resetFields();
+      // 刷新用户列表
+      const data = await adminService.getUsers();
+      setUsers(data);
+    } catch (error) {
+      console.error('重置密码失败:', error);
+    }
+  };
 
   const columns = [
     {
@@ -76,6 +106,22 @@ const UserManagement: React.FC = () => {
       sorter: (a: User, b: User) => 
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime(),
     },
+    {
+      title: '操作',
+      key: 'actions',
+      render: (_: any, record: User) => (
+        <Space>
+          <Button
+            type="primary"
+            size="small"
+            icon={<KeyOutlined />}
+            onClick={() => handleResetPassword(record)}
+          >
+            重置密码
+          </Button>
+        </Space>
+      ),
+    },
   ];
 
   const filteredUsers = users.filter(
@@ -109,6 +155,67 @@ const UserManagement: React.FC = () => {
           pagination={{ pageSize: 10 }}
         />
       )}
+
+      <Modal
+        title={`重置用户 ${selectedUser?.name} 的密码`}
+        open={resetPasswordModalVisible}
+        onCancel={() => {
+          setResetPasswordModalVisible(false);
+          setSelectedUser(null);
+          resetPasswordForm.resetFields();
+        }}
+        footer={null}
+      >
+        <Form
+          form={resetPasswordForm}
+          layout="vertical"
+          onFinish={handleResetPasswordSubmit}
+        >
+          <Form.Item
+            label="新密码"
+            name="newPassword"
+            rules={[
+              { required: true, message: '请输入新密码' },
+              { min: 8, message: '密码长度至少8位' }
+            ]}
+          >
+            <Input.Password placeholder="请输入新密码" />
+          </Form.Item>
+          
+          <Form.Item
+            label="确认密码"
+            name="confirmPassword"
+            rules={[
+              { required: true, message: '请确认新密码' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('newPassword') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('两次输入的密码不一致'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="请再次输入新密码" />
+          </Form.Item>
+          
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">
+                确认重置
+              </Button>
+              <Button onClick={() => {
+                setResetPasswordModalVisible(false);
+                setSelectedUser(null);
+                resetPasswordForm.resetFields();
+              }}>
+                取消
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

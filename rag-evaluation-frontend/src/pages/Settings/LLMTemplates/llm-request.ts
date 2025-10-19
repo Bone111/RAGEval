@@ -26,11 +26,12 @@ export class LLMClient {
     this.apiKey = apiKey;
     this.modelName = modelName;
     this.additionalParams = additionalParams;
-    this.client = new OpenAI({
-      apiKey: this.apiKey,
-      baseURL: this.baseUrl,
-      dangerouslyAllowBrowser: true,
-    });
+    // 移除OpenAI客户端直接实例化，改为通过后端代理
+    // this.client = new OpenAI({
+    //   apiKey: this.apiKey,
+    //   baseURL: this.baseUrl,
+    //   dangerouslyAllowBrowser: true,
+    // });
   }
 
   static async getConfigById(configId: string): Promise<ModelConfig | null> {
@@ -73,16 +74,31 @@ export class LLMClient {
     additionalParams?: Record<string, any>;
   }): Promise<string> {
     try {
-      const response = await this.client.chat.completions.create({
-        model: this.modelName,
-        messages: [
-          { role: 'system', content: systemMessage },
-          { role: 'user', content: userMessage },
-        ],
-        ...(this.additionalParams || {}),
-        ...additionalParams,
+      // 通过后端代理发送请求，避免跨域问题
+      const response = await fetch('/api/v1/llm/proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          base_url: this.baseUrl,
+          api_key: this.apiKey,
+          model_name: this.modelName,
+          messages: [
+            { role: 'system', content: systemMessage },
+            { role: 'user', content: userMessage },
+          ],
+          ...(this.additionalParams || {}),
+          ...additionalParams,
+        })
       });
-      const content = response.choices?.[0]?.message?.content?.trim() || '';
+
+      if (!response.ok) {
+        throw new Error(`请求失败: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.choices?.[0]?.message?.content?.trim() || '';
       return content;
     } catch (err: any) {
       throw new Error(err.message || '请求异常');

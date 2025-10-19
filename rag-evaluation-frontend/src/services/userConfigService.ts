@@ -69,13 +69,43 @@ function convertModelConfigToServerFormat(config: Omit<ModelConfig, 'id' | 'user
 }
 
 function convertRAGConfigToServerFormat(config: Omit<RAGConfig, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): UserRAGConfigCreate {
+  // 安全解析 requestHeaders
+  let requestHeaders = {};
+  if (config.requestHeaders) {
+    if (typeof config.requestHeaders === 'string') {
+      try {
+        requestHeaders = JSON.parse(config.requestHeaders);
+      } catch (error) {
+        console.warn('无法解析 requestHeaders JSON字符串:', config.requestHeaders, error);
+        requestHeaders = {};
+      }
+    } else {
+      requestHeaders = config.requestHeaders;
+    }
+  }
+
+  // 安全解析 requestTemplate
+  let requestTemplate = {};
+  if (config.requestTemplate) {
+    if (typeof config.requestTemplate === 'string') {
+      try {
+        requestTemplate = JSON.parse(config.requestTemplate);
+      } catch (error) {
+        console.warn('无法解析 requestTemplate JSON字符串:', config.requestTemplate, error);
+        requestTemplate = {};
+      }
+    } else {
+      requestTemplate = config.requestTemplate;
+    }
+  }
+
   return {
     name: config.name,
     type: config.type,
     url: config.url,
     api_key: config.apiKey,
-    request_headers: config.requestHeaders || {},
-    request_template: config.requestTemplate || {},
+    request_headers: requestHeaders,
+    request_template: requestTemplate,
     response_path: config.responsePath,
     stream_event_field: config.streamEventField,
     stream_event_value: config.streamEventValue,
@@ -233,8 +263,32 @@ export class UserConfigService {
       if (updates.type !== undefined) serverUpdates.type = updates.type;
       if (updates.url !== undefined) serverUpdates.url = updates.url;
       if (updates.apiKey !== undefined) serverUpdates.api_key = updates.apiKey;
-      if (updates.requestHeaders !== undefined) serverUpdates.request_headers = updates.requestHeaders;
-      if (updates.requestTemplate !== undefined) serverUpdates.request_template = updates.requestTemplate;
+      if (updates.requestHeaders !== undefined) {
+        // 处理 requestHeaders，确保发送对象格式
+        if (typeof updates.requestHeaders === 'string') {
+          try {
+            serverUpdates.request_headers = JSON.parse(updates.requestHeaders);
+          } catch (error) {
+            console.warn('无法解析 requestHeaders JSON字符串:', updates.requestHeaders, error);
+            serverUpdates.request_headers = {};
+          }
+        } else {
+          serverUpdates.request_headers = updates.requestHeaders;
+        }
+      }
+      if (updates.requestTemplate !== undefined) {
+        // 处理 requestTemplate，确保发送对象格式
+        if (typeof updates.requestTemplate === 'string') {
+          try {
+            serverUpdates.request_template = JSON.parse(updates.requestTemplate);
+          } catch (error) {
+            console.warn('无法解析 requestTemplate JSON字符串:', updates.requestTemplate, error);
+            serverUpdates.request_template = {};
+          }
+        } else {
+          serverUpdates.request_template = updates.requestTemplate;
+        }
+      }
       if (updates.responsePath !== undefined) serverUpdates.response_path = updates.responsePath;
       if (updates.streamEventField !== undefined) serverUpdates.stream_event_field = updates.streamEventField;
       if (updates.streamEventValue !== undefined) serverUpdates.stream_event_value = updates.streamEventValue;

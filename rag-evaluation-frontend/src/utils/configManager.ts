@@ -247,10 +247,10 @@ export class ConfigManager {
   private async getConfigFromServer<T extends BaseConfig>(configId: string, type: 'model' | 'rag'): Promise<T | null> {
     if (type === 'model') {
       const result = await this.userConfigService.getModelConfig(configId);
-      return result as T | null;
+      return result as unknown as T | null;
     } else {
       const result = await this.userConfigService.getRAGConfig(configId);
-      return result as T | null;
+      return result as unknown as T | null;
     }
   }
 
@@ -258,7 +258,7 @@ export class ConfigManager {
     await this.updateCurrentUserId();
     const userConfigs = this.getUserConfigs();
     const configs = type === 'model' ? userConfigs.models : userConfigs.rags;
-    return  configs.find(c => c.id === configId) as unknown as T || null;
+    return configs.find(c => c.id === configId) as unknown as T || null;
   }
 
   // 获取所有配置
@@ -293,10 +293,10 @@ export class ConfigManager {
   private async getAllConfigsFromServer<T extends BaseConfig>(type: 'model' | 'rag'): Promise<T[]> {
     if (type === 'model') {
       const result = await this.userConfigService.getModelConfigs();
-      return result as T[];
+      return result as unknown as T[];
     } else {
       const result = await this.userConfigService.getRAGConfigs();
-      return result as T[];
+      return result as unknown as T[];
     }
   }
 
@@ -387,12 +387,22 @@ export class ConfigManager {
     // 同步模型配置
     for (const config of localConfigs.models) {
       try {
-        await this.userConfigService.createModelConfig(config);
+        // 先检查是否已存在同名配置
+        const existingConfig = await this.userConfigService.findConfigByNameAndType(config.name, config.type, 'model');
+        
+        if (existingConfig) {
+          // 如果存在，更新配置
+          await this.userConfigService.updateModelConfig(existingConfig.id, config);
+          console.log('模型配置更新成功:', config.name);
+        } else {
+          // 如果不存在，创建新配置
+          await this.userConfigService.createModelConfig(config);
+          console.log('模型配置创建成功:', config.name);
+        }
         result.success++;
-        console.log('模型配置同步成功:', config.name);
       } catch (error) {
         result.failed++;
-        const errorMsg = `同步模型配置失败 [${config.name}]: ${error instanceof Error ? error.message : JSON.stringify(error)}`;
+        const errorMsg = `同步模型配置失败 [${config.name}]: ${error instanceof Error ? error.message : String(error)}`;
         result.errors.push(errorMsg);
         console.error('同步模型配置详细错误:', error);
       }
@@ -401,21 +411,33 @@ export class ConfigManager {
     // 同步RAG配置
     for (const config of localConfigs.rags) {
       try {
-        await this.userConfigService.createRAGConfig(config);
+        // 先检查是否已存在同名配置
+        const existingConfig = await this.userConfigService.findConfigByNameAndType(config.name, config.type, 'rag');
+        
+        if (existingConfig) {
+          // 如果存在，更新配置
+          await this.userConfigService.updateRAGConfig(existingConfig.id, config);
+          console.log('RAG配置更新成功:', config.name);
+        } else {
+          // 如果不存在，创建新配置
+          await this.userConfigService.createRAGConfig(config);
+          console.log('RAG配置创建成功:', config.name);
+        }
         result.success++;
-        console.log('RAG配置同步成功:', config.name);
       } catch (error) {
         result.failed++;
-        const errorMsg = `同步RAG配置失败 [${config.name}]: ${error instanceof Error ? error.message : JSON.stringify(error)}`;
+        const errorMsg = `同步RAG配置失败 [${config.name}]: ${error instanceof Error ? error.message : String(error)}`;
         result.errors.push(errorMsg);
         console.error('同步RAG配置详细错误:', error);
       }
     }
     
-    // 如果同步成功，清理本地存储
-    if (result.failed === 0) {
+    // 只有在完全成功时才清理本地存储
+    if (result.failed === 0 && result.success > 0) {
       this.clearUserConfigs();
       console.log('本地配置已清理');
+    } else if (result.failed > 0) {
+      console.warn(`迁移未完全成功，保留本地配置。成功: ${result.success}, 失败: ${result.failed}`);
     }
     
     return result;
@@ -446,6 +468,48 @@ export class ConfigManager {
     ]);
     
     return { models, rags };
+  }
+
+  // 导入配置（从备份文件恢复）
+  public async importConfigs(configData: { models: ModelConfig[]; rags: RAGConfig[] }): Promise<{ success: number; failed: number; errors: string[] }> {
+    const result = { success: 0, failed: 0, errors: [] as string[] };
+    
+    try {
+      // 导入模型配置
+      for (const model of configData.models) {
+        try {
+          // 移除id字段，让系统生成新的id
+          const { id, ...modelWithoutId } = model;
+          await this.createConfig(modelWithoutId, 'model');
+          result.success++;
+        } catch (error) {
+          result.failed++;
+          result.errors.push(`模型配置 "${model.name}" 导入失败: ${error}`);
+        }
+      }
+      
+      // 导入RAG配置
+      for (const rag of configData.rags) {
+        try {
+          // 移除id字段，让系统生成新的id
+          const { id, ...ragWithoutId } = rag;
+          await this.createConfig(ragWithoutId, 'rag');
+          result.success++;
+        } catch (error) {
+          result.failed++;
+          result.errors.push(`RAG配置 "${rag.name}" 导入失败: ${error}`);
+        }
+      }
+      
+      // 触发配置变化事件，通知页面刷新
+      if (result.success > 0) {
+        window.dispatchEvent(new CustomEvent('configChanged'));
+      }
+      
+      return result;
+    } catch (error) {
+      throw new Error(`导入配置失败: ${error}`);
+    }
   }
 
   // 调试：获取详细状态信息

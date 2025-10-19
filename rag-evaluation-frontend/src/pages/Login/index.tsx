@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Form, Input, Button, Checkbox, Divider, message, Card, Typography, Row, Col } from 'antd';
 import { UserOutlined, LockOutlined, GithubOutlined } from '@ant-design/icons';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import './Login.css';
 import { authService } from '../../services/auth.service';
 
@@ -153,7 +153,11 @@ const Login: React.FC = () => {
                     <Form.Item name="remember" valuePropName="checked" noStyle>
                       <Checkbox>记住我</Checkbox>
                     </Form.Item>
-                    <a className="login-form-forgot" href="/forgot-password">
+                    <a 
+                      className="login-form-forgot" 
+                      onClick={() => navigate('/forgot-password')}
+                      style={{ cursor: 'pointer' }}
+                    >
                       忘记密码？
                     </a>
                   </div>
@@ -171,7 +175,7 @@ const Login: React.FC = () => {
                 </Button>
               </Form.Item>
               
-              <Divider plain>或者使用</Divider>
+              {/* <Divider plain>或者使用</Divider>
               
               <Button 
                 icon={<GithubOutlined />}
@@ -179,7 +183,7 @@ const Login: React.FC = () => {
                 onClick={() => message.info('GitHub登录功能开发中')}
               >
                 GitHub账号登录
-              </Button>
+              </Button> */}
               
               <div className="text-center mt-4">
                 <span className="toggle-form-text" onClick={toggleForm}>

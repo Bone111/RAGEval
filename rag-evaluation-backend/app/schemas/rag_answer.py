@@ -92,3 +92,19 @@ class RAGAnswerWithQuestion(BaseModel):
     sequence_number: Optional[int] = None
     
     model_config = ConfigDict(from_attributes=True)
+
+# 自定义RAG请求模型
+class CustomRAGRequest(BaseModel):
+    url: str
+    request_headers: Dict[str, str]
+    request_template: Dict[str, Any]
+    response_path: str = "answer"
+    stream_event_field: Optional[str] = None
+    stream_event_value: Optional[str] = None
+    question: str
+
+class CustomRAGResponse(BaseModel):
+    success: bool
+    answer: Optional[str] = None
+    error: Optional[str] = None
+    raw_response: Optional[Dict[str, Any]] = None

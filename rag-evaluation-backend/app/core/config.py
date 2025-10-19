@@ -85,12 +85,22 @@ class Settings(BaseSettings):
     # Anthropic API 配置
     ANTHROPIC_API_KEY: Optional[str] = None
     
+    # 邮件服务配置
+    SMTP_SERVER: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SENDER_EMAIL: Optional[str] = None
+    SENDER_PASSWORD: Optional[str] = None
+    SENDER_NAME: str = "RAG评测系统"
+    
+    # 前端地址配置
+    FRONTEND_URL: str = os.getenv("FRONTEND_URL", "http://localhost:5173")
+    
     # 测试用户
     FIRST_ADMIN_EMAIL: EmailStr = "admin@example.com"
     FIRST_ADMIN_PASSWORD: str = "adminpassword"
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file="config.env",
         case_sensitive=True
     )
 

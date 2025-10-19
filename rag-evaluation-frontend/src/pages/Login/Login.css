@@ -4,6 +4,11 @@
   width: 100%;
   overflow: hidden;
   background-color: #f0f2f5;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 .login-page-wrapper {
@@ -111,6 +116,13 @@
 
 .login-form-forgot {
   float: right;
+  color: #1890ff;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.login-form-forgot:hover {
+  color: #40a9ff;
 }
 
 .mt-4 {

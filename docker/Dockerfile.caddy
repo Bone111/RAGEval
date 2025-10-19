@@ -1,5 +1,5 @@
 # 多阶段构建 - 构建前端
-FROM node:18-alpine AS frontend-builder
+FROM --platform=linux/amd64 node:18-alpine AS frontend-builder
 
 # 设置工作目录
 WORKDIR /app

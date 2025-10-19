@@ -118,6 +118,21 @@ class AdminService {
       throw error;
     }
   }
+
+  // 管理员重置用户密码
+  async resetUserPassword(userId: string, newPassword: string): Promise<void> {
+    try {
+      await api.post('/v1/admin/reset-password', {
+        user_id: userId,
+        new_password: newPassword
+      });
+      message.success('密码重置成功');
+    } catch (error) {
+      console.error('重置用户密码失败:', error);
+      message.error('重置用户密码失败');
+      throw error;
+    }
+  }
 }
 
 export const adminService = new AdminService();

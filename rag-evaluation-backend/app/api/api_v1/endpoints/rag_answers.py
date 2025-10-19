@@ -16,7 +16,9 @@ from app.schemas.rag_answer import (
     ApiRequestConfig,
     CollectionProgress,
     RagAnswerCreate,
-    RagAnswerUpdate
+    RagAnswerUpdate,
+    CustomRAGRequest,
+    CustomRAGResponse
 )
 from app.services.rag_service import RagService
 from app.models.rag_answer import RagAnswer
@@ -233,11 +235,8 @@ def create_rag_answer(
 
     # 只提取数据库模型支持的字段
     valid_fields = ["question_id", "answer", "collection_method", "version", 
-                    "first_response_time", "total_response_time", "character_count", "raw_response"
-                    ,'charactersPerSecond'
-                    ,'sequenceNumber' 
-                    ,'characters_per_second'
-                    ,'performance_test_id']
+                    "first_response_time", "total_response_time", "character_count", "raw_response",
+                    "sequence_number", "characters_per_second", "performance_test_id"]
     
     rag_answer_data = {k: v for k, v in rag_answer_in.items() if k in valid_fields}
     
@@ -333,7 +332,8 @@ def update_rag_answer(
     
     # 只更新模型支持的字段
     valid_fields = ["answer", "collection_method", "version", 
-                   "first_response_time", "total_response_time", "character_count", "raw_response"]
+                   "first_response_time", "total_response_time", "character_count", "raw_response",
+                   "sequence_number", "characters_per_second", "performance_test_id"]
     
     for key, value in rag_answer_in.items():
         if key in valid_fields:
@@ -353,4 +353,103 @@ def get_dataset_rag_versions(
     """获取数据集下的所有RAG回答版本"""
     service = RagService(db)
     versions = service.get_dataset_versions(dataset_id)
-    return versions 
+    return versions
+
+@router.post("/custom-rag", response_model=CustomRAGResponse)
+async def custom_rag_request(
+    *,
+    db: Session = Depends(get_db),
+    req: CustomRAGRequest,
+    current_user: User = Depends(get_current_user)
+) -> Any:
+    """
+    自定义RAG系统请求
+    """
+    try:
+        # 导入必要的模块
+        import httpx
+        import json
+        import time
+        
+        # 准备请求头
+        headers = {
+            "Content-Type": "application/json"
+        }
+        headers.update(req.request_headers)
+        
+        # 准备请求体，替换{{question}}占位符
+        request_template = req.request_template.copy()
+        request_body = json.dumps(request_template).replace("{{question}}", req.question)
+        request_data = json.loads(request_body)
+        
+        # 记录请求信息
+        print(f"发送自定义RAG请求到: {req.url}")
+        
+        # 发送请求
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                req.url,
+                headers=headers,
+                json=request_data
+            )
+            
+            if response.status_code != 200:
+                return CustomRAGResponse(
+                    success=False,
+                    error=f"HTTP错误: {response.status_code} - {response.text}"
+                )
+            
+            # 处理响应
+            try:
+                response_json = response.json()
+            except json.JSONDecodeError:
+                return CustomRAGResponse(
+                    success=False,
+                    error="无法解析API响应JSON"
+                )
+            
+            # 从响应中提取回答
+            answer_text = extract_answer_from_response(response_json, req.response_path)
+            if not answer_text:
+                return CustomRAGResponse(
+                    success=False,
+                    error=f"无法从响应中提取回答，路径: {req.response_path}",
+                    raw_response=response_json
+                )
+            
+            return CustomRAGResponse(
+                success=True,
+                answer=answer_text,
+                raw_response=response_json
+            )
+            
+    except httpx.TimeoutException:
+        return CustomRAGResponse(
+            success=False,
+            error="API请求超时"
+        )
+    except Exception as e:
+        return CustomRAGResponse(
+            success=False,
+            error=f"请求失败: {str(e)}"
+        )
+
+def extract_answer_from_response(response_json: Dict[str, Any], path: str) -> Optional[str]:
+    """从响应JSON中提取回答文本"""
+    try:
+        parts = path.split('.')
+        current = response_json
+        
+        for part in parts:
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                return None
+        
+        # 确保结果是字符串
+        if isinstance(current, str):
+            return current
+        else:
+            return str(current)
+    except Exception:
+        return None 

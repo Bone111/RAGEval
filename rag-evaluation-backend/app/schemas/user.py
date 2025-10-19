@@ -42,6 +42,17 @@ class TokenPayload(BaseModel):
     sub: Optional[str] = None
     exp: Optional[int] = None
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8)
+
+class AdminResetPasswordRequest(BaseModel):
+    user_id: str
+    new_password: str = Field(..., min_length=8)
+
 class ApiKeyBase(BaseModel):
     name: str
     provider: str

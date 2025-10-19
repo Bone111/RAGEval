@@ -11,6 +11,8 @@ from app.models.dataset import Dataset
 from app.models.question import Question
 from app.schemas.dataset import DatasetOut
 from app.schemas.project import ProjectOut
+from app.schemas.user import UserOut, AdminResetPasswordRequest
+from app.core.security import get_password_hash
 
 router = APIRouter()
 
@@ -54,3 +56,38 @@ def get_system_statistics(
             "total": total_questions
         }
     }
+
+@router.get("/users", response_model=List[UserOut])
+def get_all_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_admin),
+) -> Any:
+    """
+    获取所有用户列表（仅管理员可访问）
+    """
+    users = db.query(User).all()
+    return users
+
+@router.post("/reset-password")
+def admin_reset_user_password(
+    *,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_admin),
+    request: AdminResetPasswordRequest,
+) -> Any:
+    """
+    管理员重置用户密码
+    """
+    # 查找目标用户
+    user = db.query(User).filter(User.id == request.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    
+    # 更新密码
+    user.password_hash = get_password_hash(request.new_password)
+    # 清除重置令牌（如果存在）
+    user.reset_token = None
+    user.reset_token_expires = None
+    db.commit()
+    
+    return {"message": f"用户 {user.email} 的密码已重置成功"}

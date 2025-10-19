@@ -6,7 +6,8 @@
  * 
  */
 
-import { LLMClient } from '@pages/Settings/LLMTemplates/llm-request';
+import { api } from '../../utils/api';
+import { ConfigManager, ModelConfig } from '../../utils/configManager';
 import * as yaml from 'js-yaml';
 
 /**
@@ -38,23 +39,61 @@ export class AccuracyRequestService {
   /**
    * 执行LLM评测
    * 
-   * 使用LLM客户端发送评测请求并获取响应
+   * 使用后端代理发送评测请求并获取响应
    * 
    * @param {string} prompt - 评测提示词
    * @param {string} modelConfigId - 模型配置ID
    * @returns {Promise<string>} LLM的响应文本
    */
   async evaluateWithLLM(prompt: string, modelConfigId: string): Promise<string> {
-    const llmClient = await LLMClient.createFromConfigId(modelConfigId);
-    const response = await llmClient.chatCompletion({
-      userMessage: prompt,
-      systemMessage: '你是一个专业的RAG回答评估专家，你的任务是评估生成式AI的回答质量。请根据提供的标准答案评价RAG系统的回答质量，分析其准确性、相关性和完整性。',
-      additionalParams: {
-        temperature: 0.2,
-        max_tokens: 1000
+    const configManager = ConfigManager.getInstance();
+    const config = await configManager.getConfig<ModelConfig>(modelConfigId, 'model');
+    
+    if (!config) {
+      throw new Error('模型配置未找到');
+    }
+
+    // 解析额外参数
+    let additionalParams: any = {};
+    if (config.additionalParams) {
+      if (typeof config.additionalParams === 'string') {
+        try {
+          additionalParams = JSON.parse(config.additionalParams);
+        } catch (err) {
+          console.warn('Failed to parse additionalParams:', err);
+          additionalParams = {};
+        }
+      } else {
+        additionalParams = config.additionalParams;
       }
-    });
-    return response;
+    }
+
+    // 合并默认参数
+    const finalParams = {
+      temperature: 0.2,
+      max_tokens: 1000,
+      ...additionalParams
+    };
+
+    try {
+      const response = await api.post('/api/v1/llm/evaluate', {
+        base_url: config.baseUrl,
+        api_key: config.apiKey,
+        model_name: config.modelName,
+        user_message: prompt,
+        system_message: '你是一个专业的RAG回答评估专家，你的任务是评估生成式AI的回答质量。请根据提供的标准答案评价RAG系统的回答质量，分析其准确性、相关性和完整性。',
+        additional_params: finalParams
+      });
+
+      if ((response as any).success) {
+        return (response as any).content;
+      } else {
+        throw new Error((response as any).message || 'LLM评测请求失败');
+      }
+    } catch (error: any) {
+      console.error('LLM评测请求失败:', error);
+      throw new Error(error.message || 'LLM评测请求失败');
+    }
   }
 
   /**

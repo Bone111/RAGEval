@@ -21,6 +21,22 @@ interface AuthResponse {
   token_type: string;
 }
 
+interface ForgotPasswordRequest {
+  email: string;
+}
+
+interface ForgotPasswordResponse {
+  message: string;
+  contact_info?: string;
+  token?: string;
+  reset_url?: string;
+}
+
+interface ResetPasswordRequest {
+  token: string;
+  new_password: string;
+}
+
 interface UserInfo {
   id: string;
   name: string;
@@ -190,6 +206,94 @@ class AuthService {
   isAdmin(): boolean {
     const userInfo = this.getCurrentUserSync();
     return userInfo?.is_admin || false;
+  }
+
+  // 忘记密码
+  async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
+    try {
+      const response = await fetch('/api/v1/auth/forgot-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || '发送重置邮件失败');
+      }
+
+      const result = await response.json();
+      
+      // 检查是否包含联系管理员的信息
+      if (result.contact_info) {
+        message.warning(result.message);
+        if (result.reset_url) {
+          console.log('开发环境重置链接:', result.reset_url);
+        }
+      } else {
+        message.success(result.message);
+      }
+
+      return result;
+    } catch (error) {
+      console.error('忘记密码错误:', error);
+      message.error(error instanceof Error ? error.message : '发送重置邮件失败，请稍后重试');
+      throw error;
+    }
+  }
+
+  // 修改密码（已登录用户）
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ message: string }> {
+    try {
+      const response = await fetch('/api/v1/auth/change-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Bearer ${this.getToken()}`,
+        },
+        body: new URLSearchParams({
+          current_password: currentPassword,
+          new_password: newPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || '修改密码失败');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('修改密码错误:', error);
+      message.error(error instanceof Error ? error.message : '修改密码失败，请稍后重试');
+      throw error;
+    }
+  }
+
+  // 重置密码
+  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+    try {
+      const response = await fetch('/api/v1/auth/reset-password', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ token, new_password: newPassword }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || '重置密码失败');
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('重置密码错误:', error);
+      message.error(error instanceof Error ? error.message : '重置密码失败，请稍后重试');
+      throw error;
+    }
   }
 }
 

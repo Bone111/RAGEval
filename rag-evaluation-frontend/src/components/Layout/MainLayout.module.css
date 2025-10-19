@@ -1,5 +1,9 @@
 .layout {
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .header {
@@ -112,6 +116,9 @@
 .content {
   /*padding: 24px;*/
   background: #f5f6fa;
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .contentContainer {
@@ -121,7 +128,8 @@
   padding-top: 0px;
   max-width: 1400px;
   margin: 0 auto;
-  min-height: 80vh;
+  min-height: calc(100vh - 64px - 64px); /* 减去header和footer的高度 */
+  transition: opacity 0.2s ease-in-out;
 }
 
 .footer {
