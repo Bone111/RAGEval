@@ -46,6 +46,9 @@ services:
       - POSTGRES_SERVER=database          # 数据库服务器地址
       - POSTGRES_USER=postgres            # 数据库用户名
       - POSTGRES_PASSWORD=postgres        # 数据库密码
+      # MinerU 默认配置
+      - MINERU_DEFAULT_API_KEY=${MINERU_DEFAULT_API_KEY}
+      - MINERU_DEFAULT_EXPIRY_DATE=${MINERU_DEFAULT_EXPIRY_DATE}
     ports:
       - "8000:8000"                       # 暴露后端API端口到宿主机
     depends_on:

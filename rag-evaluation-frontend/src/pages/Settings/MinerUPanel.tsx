@@ -1,19 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Card, Form, Input, Button, message, Typography, Alert, Space, Divider } from 'antd';
-import { FileTextOutlined, InfoCircleOutlined, SaveOutlined } from '@ant-design/icons';
+import { FileTextOutlined, InfoCircleOutlined, SaveOutlined, CopyOutlined } from '@ant-design/icons';
 import { ConfigManager } from '../../utils/configManager';
-import { mineruService } from '../../services/mineruService';
+import { mineruService, MinerUDefaultConfig } from '../../services/mineruService';
 
 const { Title, Text } = Typography;
 
 const MinerUPanel: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [defaultConfig, setDefaultConfig] = useState<MinerUDefaultConfig | null>(null);
   const configManager = ConfigManager.getInstance();
 
   // 加载配置
   useEffect(() => {
     loadConfig();
+    loadDefaultConfig();
   }, []);
 
   // 监听配置变化事件
@@ -50,6 +52,35 @@ const MinerUPanel: React.FC = () => {
       }
     } catch (error) {
       console.error('加载MinerU配置失败:', error);
+    }
+  };
+
+  const loadDefaultConfig = async () => {
+    try {
+      console.log('开始获取默认配置...');
+      const config = await mineruService.getDefaultConfig();
+      console.log('获取到的默认配置:', config);
+      console.log('default_api_key:', config.default_api_key);
+      console.log('expiry_date:', config.expiry_date);
+      
+      // 直接设置配置，不管是否为空
+      setDefaultConfig(config);
+    } catch (error) {
+      console.error('加载默认配置失败:', error);
+      // 出错时设置一个测试配置
+      setDefaultConfig({
+        default_api_key: '暂无秘钥',
+        expiry_date: '----'
+      });
+    }
+  };
+
+  const handleCopyKey = async (key: string) => {
+    try {
+      await navigator.clipboard.writeText(key);
+      message.success('密钥已复制到剪贴板');
+    } catch (error) {
+      message.error('复制失败');
     }
   };
 
@@ -136,6 +167,34 @@ const MinerUPanel: React.FC = () => {
         showIcon
         style={{ marginBottom: 24 }}
       />
+
+      {console.log('渲染时 defaultConfig:', defaultConfig)}
+      <Card title="免费秘钥" style={{ marginBottom: 24 }}>
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <div>
+            <Text strong>可用密钥：</Text>
+            <Input.Group compact style={{ marginTop: 8 }}>
+              <Input
+                value={defaultConfig?.default_api_key || '暂无配置'}
+                readOnly
+                style={{ width: 'calc(100% - 80px)' }}
+              />
+              <Button 
+                type="primary" 
+                icon={<CopyOutlined />}
+                onClick={() => handleCopyKey(defaultConfig?.default_api_key || '')}
+                disabled={!defaultConfig?.default_api_key}
+              >
+                复制
+              </Button>
+            </Input.Group>
+          </div>
+          <div>
+            <Text strong>过期时间：</Text>
+            <Text style={{ marginLeft: 8 }}>{defaultConfig?.expiry_date || '暂无配置'}</Text>
+          </div>
+        </Space>
+      </Card>
 
       <Card>
         <Form

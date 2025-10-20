@@ -436,3 +436,13 @@ def delete_mineru_config(
     db.commit()
     
     return {"message": "配置已删除"}
+
+
+@router.get("/mineru-default-config")
+def get_mineru_default_config():
+    """获取MinerU默认配置信息"""
+    from app.core.config import settings
+    return {
+        "default_api_key": settings.MINERU_DEFAULT_API_KEY,
+        "expiry_date": settings.MINERU_DEFAULT_EXPIRY_DATE
+    }

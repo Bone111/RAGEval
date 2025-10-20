@@ -16,6 +16,11 @@ export interface MinerUError {
   api_code?: number;
 }
 
+export interface MinerUDefaultConfig {
+  default_api_key?: string;
+  expiry_date?: string;
+}
+
 class MinerUService {
   /**
    * 检查MinerU配置状态
@@ -157,6 +162,25 @@ class MinerUService {
           action: () => {},
           type: 'default' as const
         };
+    }
+  }
+
+  /**
+   * 获取MinerU默认配置
+   */
+  async getDefaultConfig(): Promise<MinerUDefaultConfig> {
+    try {
+      console.log('mineruService: 开始调用API...');
+      const response = await api.get('/user-configs/mineru-default-config') as any;
+      console.log('mineruService: API响应:', response);
+      // api.get 直接返回数据，不需要 .data
+      return response;
+    } catch (error) {
+      console.error('获取MinerU默认配置失败:', error);
+      return {
+        default_api_key: undefined,
+        expiry_date: undefined
+      };
     }
   }
 }

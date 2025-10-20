@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     # MinerU API 配置
     MINERU_API_KEY: Optional[str] = None
     
+    # MinerU 默认配置
+    MINERU_DEFAULT_API_KEY: Optional[str] = None
+    MINERU_DEFAULT_EXPIRY_DATE: Optional[str] = None
+    
     # 邮件服务配置
     SMTP_SERVER: str = "smtp.gmail.com"
     SMTP_PORT: int = 587
