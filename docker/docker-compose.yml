@@ -34,6 +34,7 @@ services:
     build: 
       context: ..                         # 构建上下文：项目根目录
       dockerfile: docker/Dockerfile.backend  # 后端Dockerfile路径
+    platform: linux/amd64
     container_name: rag-eval-backend      # 容器名称
     # volumes:
       # 开发模式：将后端代码目录挂载到容器，支持热重载
@@ -60,6 +61,7 @@ services:
     build:
       context: ..                         # 构建上下文：项目根目录
       dockerfile: docker/Dockerfile.caddy # Caddy Dockerfile路径
+    platform: linux/amd64
     container_name: rag-eval-caddy        # 容器名称
     volumes:
       # Caddy配置文件：只读挂载

@@ -338,7 +338,6 @@ const DatasetsPage: React.FC = () => {
 
       {/* 编辑数据集弹窗 */}
       <EditDatasetModal
-        visible={isEditModalVisible}
         open={isEditModalVisible}
         dataset={currentDataset}
         onCancel={() => setIsEditModalVisible(false)}

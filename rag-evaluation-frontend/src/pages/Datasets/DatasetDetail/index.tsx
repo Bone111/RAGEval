@@ -21,7 +21,6 @@ import AddQuestionModal from './components/AddQuestionModal';
 import RagAnswerModal from './components/RagAnswerModal';
 
 const { Title, Text } = Typography;
-const { TabPane } = Tabs;
 const { confirm } = Modal;
 
 
@@ -532,12 +531,17 @@ const DatasetDetailPage: React.FC = () => {
 
   return (
     <Layout.Content className={styles.pageContainer}>
-      <Breadcrumb className={styles.breadcrumb}>
-        <Breadcrumb.Item>
-          <a onClick={() => navigate('/datasets')}>数据集管理</a>
-        </Breadcrumb.Item>
-        <Breadcrumb.Item>{dataset.name}</Breadcrumb.Item>
-      </Breadcrumb>
+      <Breadcrumb 
+        className={styles.breadcrumb}
+        items={[
+          {
+            title: <a onClick={() => navigate('/datasets')}>数据集管理</a>
+          },
+          {
+            title: dataset.name
+          }
+        ]}
+      />
 
       {/* 数据集头部信息 */}
       <DatasetHeader
@@ -550,65 +554,75 @@ const DatasetDetailPage: React.FC = () => {
       />
 
       <Card className={styles.contentCard}>
-        <Tabs defaultActiveKey="questions" activeKey={activeTabKey} onChange={handleTabChange}>
-          <TabPane tab="问题列表" key="questions">
-            <QuestionListTab
-              questions={questions}
-              questionsLoading={questionsLoading}
-              total={total}
-              currentPage={currentPage}
-              pageSize={pageSize}
-              searchText={searchText}
-              categoryFilter={categoryFilter}
-              difficultyFilter={difficultyFilter}
-              selectedRowKeys={selectedRowKeys}
-              editingKey={editingKey}
-              expandedRowKeys={expandedRowKeys}
-              form={form}
-              onAddQuestion={handleAddQuestion}
-              onSearch={handleSearch}
-              onSelectChange={handleSelectChange}
-              onBatchDelete={handleBatchDelete}
-              onEdit={edit}
-              onSave={save}
-              onCancel={cancel}
-              onDeleteQuestion={handleDeleteQuestion}
-              onPageChange={handlePageChange}
-              onPageSizeChange={handlePageSizeChange}
-              onExpandedRowsChange={setExpandedRowKeys}
-              showAddRagAnswerModal={showAddRagAnswerModal}
-              showEditRagAnswerModal={showEditRagAnswerModal}
-              handleDeleteRagAnswer={handleDeleteRagAnswer}
-            />
-          </TabPane>
-
-          <TabPane tab="关联项目" key="projects">
-            <RelatedProjectsTab dataset={dataset} />
-          </TabPane>
-
-          {/* AI生成问答对 */}
-          <TabPane tab="AI生成问答对" key="generate-qa">
-            {dataset && id && (
-              <QuestionGenerationContent
-                datasetId={id}
-                onGenerationComplete={() => {
-                  fetchQuestions(id, {
-                    page: currentPage,
-                    size: pageSize,
-                    search: searchText,
-                    category: categoryFilter,
-                    difficulty: difficultyFilter
-                  });
-                }}
-              />
-            )}
-          </TabPane>
-        </Tabs>
+        <Tabs 
+          defaultActiveKey="questions" 
+          activeKey={activeTabKey} 
+          onChange={handleTabChange}
+          items={[
+            {
+              key: 'questions',
+              label: '问题列表',
+              children: (
+                <QuestionListTab
+                  questions={questions}
+                  questionsLoading={questionsLoading}
+                  total={total}
+                  currentPage={currentPage}
+                  pageSize={pageSize}
+                  searchText={searchText}
+                  categoryFilter={categoryFilter}
+                  difficultyFilter={difficultyFilter}
+                  selectedRowKeys={selectedRowKeys}
+                  editingKey={editingKey}
+                  expandedRowKeys={expandedRowKeys}
+                  form={form}
+                  onAddQuestion={handleAddQuestion}
+                  onSearch={handleSearch}
+                  onSelectChange={handleSelectChange}
+                  onBatchDelete={handleBatchDelete}
+                  onEdit={edit}
+                  onSave={save}
+                  onCancel={cancel}
+                  onDeleteQuestion={handleDeleteQuestion}
+                  onPageChange={handlePageChange}
+                  onPageSizeChange={handlePageSizeChange}
+                  onExpandedRowsChange={setExpandedRowKeys}
+                  showAddRagAnswerModal={showAddRagAnswerModal}
+                  showEditRagAnswerModal={showEditRagAnswerModal}
+                  handleDeleteRagAnswer={handleDeleteRagAnswer}
+                />
+              )
+            },
+            {
+              key: 'projects',
+              label: '关联项目',
+              children: <RelatedProjectsTab dataset={dataset} />
+            },
+            {
+              key: 'generate-qa',
+              label: 'AI生成问答对',
+              children: dataset && id ? (
+                <QuestionGenerationContent
+                  datasetId={id}
+                  onGenerationComplete={() => {
+                    fetchQuestions(id, {
+                      page: currentPage,
+                      size: pageSize,
+                      search: searchText,
+                      category: categoryFilter,
+                      difficulty: difficultyFilter
+                    });
+                  }}
+                />
+              ) : null
+            }
+          ]}
+        />
       </Card>
 
       {/* 添加问题模态框 */}
       <AddQuestionModal
-        visible={isAddModalVisible}
+        open={isAddModalVisible}
         onCancel={() => {
           setIsAddModalVisible(false);
           addForm.resetFields();
@@ -631,7 +645,7 @@ const DatasetDetailPage: React.FC = () => {
 
       {/* RAG回答编辑模态框 */}
       <RagAnswerModal
-        visible={isRagAnswerModalVisible}
+        open={isRagAnswerModalVisible}
         editingRagAnswer={editingRagAnswer}
         onCancel={() => setIsRagAnswerModalVisible(false)}
         onSubmit={handleRagAnswerSubmit}

@@ -1,5 +1,5 @@
 from datetime import timedelta, datetime
-from typing import Any
+from typing import Any, Optional
 import secrets
 import smtplib
 import os
@@ -87,7 +87,7 @@ def send_reset_email(email: str, reset_token: str):
         sender_password = settings.SENDER_PASSWORD
         sender_name = settings.SENDER_NAME
         
-        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+        reset_url = f"{settings.FRONTEND_URL}/reset-password?token={reset_token}&email={email}"
         
         print(f"密码重置邮件发送到: {email}")
         print(f"重置链接: {reset_url}")
@@ -149,8 +149,8 @@ def forgot_password(
     """
     user = get_user_by_email(db, email=request.email)
     if not user:
-        # 为了安全，即使用户不存在也返回成功
-        return {"message": "如果该邮箱存在，重置邮件已发送"}
+        # 邮箱未注册，返回错误
+        raise HTTPException(status_code=400, detail="该邮箱地址未注册，请检查邮箱地址是否正确")
     
     if not user.is_active:
         raise HTTPException(status_code=400, detail="用户账户已被禁用")
@@ -173,7 +173,7 @@ def forgot_password(
             "message": "邮件发送失败，请联系管理员重置密码",
             "contact_info": "请联系系统管理员进行密码重置",
             "token": reset_token,  # 在开发环境提供令牌用于测试
-            "reset_url": f"{settings.FRONTEND_URL}/reset-password?token={reset_token}"
+            "reset_url": f"{settings.FRONTEND_URL}/reset-password?token={reset_token}&email={user.email}"
         }
 
 @router.post("/reset-password")
@@ -193,6 +193,10 @@ def reset_password(
     
     if not user:
         raise HTTPException(status_code=400, detail="无效或过期的重置令牌")
+    
+    # 验证邮箱是否与令牌对应的用户邮箱一致
+    if user.email != request.email:
+        raise HTTPException(status_code=400, detail="邮箱地址与重置令牌不匹配")
     
     # 更新密码
     user.password_hash = get_password_hash(request.new_password)

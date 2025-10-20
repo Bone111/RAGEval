@@ -540,7 +540,7 @@ export const PerformanceTestsManager: React.FC<PerformanceTestsManagerProps> = (
       </Modal>
 
       <PerformanceTestDetail
-        visible={detailVisible}
+        open={detailVisible}
         testId={selectedTestId}
         onClose={() => {
           setDetailVisible(false);

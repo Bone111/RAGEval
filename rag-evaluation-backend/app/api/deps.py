@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
@@ -60,6 +61,7 @@ def get_current_active_admin(
             detail="权限不足"
         )
     return current_user
+
 
 # # 创建一个假测试用户对象
 # test_user = User(

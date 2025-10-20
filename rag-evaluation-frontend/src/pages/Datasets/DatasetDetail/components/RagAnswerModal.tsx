@@ -5,7 +5,7 @@ const { TextArea } = Input;
 const { Option } = Select;
 
 interface RagAnswerModalProps {
-  visible: boolean;
+  open: boolean;
   editingRagAnswer: any | null;
   onCancel: () => void;
   onSubmit: () => void;
@@ -13,7 +13,7 @@ interface RagAnswerModalProps {
 }
 
 const RagAnswerModal: React.FC<RagAnswerModalProps> = ({
-  visible,
+  open,
   editingRagAnswer,
   onCancel,
   onSubmit,
@@ -22,7 +22,7 @@ const RagAnswerModal: React.FC<RagAnswerModalProps> = ({
   return (
     <Modal
       title={editingRagAnswer ? "编辑RAG回答" : "添加RAG回答"}
-      visible={visible}
+      open={open}
       onOk={onSubmit}
       onCancel={onCancel}
       width={700}

@@ -1731,7 +1731,7 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
             width={300}
             ellipsis={{ showTitle: false }}
             render={(text) => (
-              <Tooltip placement="topLeft" title={text} overlayStyle={{ maxWidth: '600px' }}>
+              <Tooltip placement="topLeft" title={text} styles={{ root: { maxWidth: '600px' } }}>
                 <span>{text}</span>
               </Tooltip>
             )}
@@ -1743,7 +1743,7 @@ const QuestionGenerationContent: React.FC<QuestionGenerationContentProps> = ({ d
             width={400}
             ellipsis={{ showTitle: false }}
             render={(text) => (
-              <Tooltip placement="topLeft" title={text} overlayStyle={{ maxWidth: '600px' }}>
+              <Tooltip placement="topLeft" title={text} styles={{ root: { maxWidth: '600px' } }}>
                 <span>{text}</span>
               </Tooltip>
             )}

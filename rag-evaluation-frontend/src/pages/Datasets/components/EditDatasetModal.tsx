@@ -10,15 +10,13 @@ const { Text } = Typography;
 const { TextArea } = Input;
 
 interface EditDatasetModalProps {
-  visible: boolean; // For backward compatibility
-  open?: boolean;
+  open: boolean;
   dataset: Dataset | null;
   onCancel: () => void;
   onSuccess: () => void;
 }
 
 const EditDatasetModal: React.FC<EditDatasetModalProps> = ({
-  visible,
   open,
   dataset,
   onCancel,
@@ -32,7 +30,7 @@ const EditDatasetModal: React.FC<EditDatasetModalProps> = ({
 
   // 当数据集变化时，重置表单
   useEffect(() => {
-    if (dataset && (visible || open)) {
+    if (dataset && open) {
       form.setFieldsValue({
         name: dataset.name,
         description: dataset.description || '',
@@ -40,7 +38,7 @@ const EditDatasetModal: React.FC<EditDatasetModalProps> = ({
       });
       setTags(dataset.tags || []);
     }
-  }, [dataset, visible, open, form]);
+  }, [dataset, open, form]);
 
   const handleSubmit = async () => {
     try {
@@ -91,7 +89,7 @@ const EditDatasetModal: React.FC<EditDatasetModalProps> = ({
   return (
     <Modal
       title="编辑数据集"
-      open={open !== undefined ? open : visible}
+      open={open}
       onCancel={onCancel}
       footer={[
         <Button key="cancel" onClick={onCancel}>

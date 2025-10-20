@@ -13,26 +13,29 @@ const ResetPassword: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [token, setToken] = useState<string | null>(null);
+  const [email, setEmail] = useState<string | null>(null);
 
   useEffect(() => {
     const tokenFromUrl = searchParams.get('token');
-    if (!tokenFromUrl) {
+    const emailFromUrl = searchParams.get('email');
+    if (!tokenFromUrl || !emailFromUrl) {
       messageApi.error('无效的重置链接');
       navigate('/login');
       return;
     }
     setToken(tokenFromUrl);
+    setEmail(emailFromUrl);
   }, [searchParams, navigate, messageApi]);
 
   const onFinish = async (values: any) => {
-    if (!token) {
-      messageApi.error('无效的重置令牌');
+    if (!token || !email) {
+      messageApi.error('无效的重置令牌或邮箱');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await authService.resetPassword(token, values.new_password);
+      const response = await authService.resetPassword(token, email, values.new_password);
       messageApi.success(response.message);
       
       // 3秒后跳转到登录页
@@ -52,8 +55,8 @@ const ResetPassword: React.FC = () => {
     navigate('/login');
   };
 
-  if (!token) {
-    return null; // 等待token加载
+  if (!token || !email) {
+    return null; // 等待token和email加载
   }
 
   return (

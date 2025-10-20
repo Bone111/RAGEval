@@ -15,17 +15,16 @@ import { datasetService } from '../../../services/dataset.service';
 import { CSVLink } from 'react-csv';
 
 const { Title, Text, Paragraph } = Typography;
-const { TabPane } = Tabs;
 
 interface AccuracyTestDetailProps {
-  visible: boolean;
+  open: boolean;
   testId: string | null;
   onClose: () => void;
   datasets?: any[]; // 添加数据集列表属性
 }
 
 export const AccuracyTestDetail: React.FC<AccuracyTestDetailProps> = ({
-  visible,
+  open,
   testId,
   onClose,
   datasets = [] // 添加datasets参数并设置默认值
@@ -55,20 +54,20 @@ export const AccuracyTestDetail: React.FC<AccuracyTestDetailProps> = ({
 
   // 加载测试详情
   useEffect(() => {
-    if (visible && testId) {
+    if (open && testId) {
       fetchTestDetail(testId);
       if (testData?.evaluation_type !== 'ai') {
         fetchHumanAssignments(testId);
       }
     }
-  }, [visible, testId]);
+  }, [open, testId]);
 
   // 分离测试详情和测试项的获取
   useEffect(() => {
-    if (visible && testId && activeTab === 'items') {
+    if (open && testId && activeTab === 'items') {
       fetchTestItems(testId);
     }
-  }, [visible, testId, activeTab, pagination.current, pagination.pageSize, itemsFilter]);
+  }, [open, testId, activeTab, pagination.current, pagination.pageSize, itemsFilter]);
 
   // 准备CSV导出数据
   useEffect(() => {
@@ -647,7 +646,7 @@ export const AccuracyTestDetail: React.FC<AccuracyTestDetailProps> = ({
     <Drawer
       title={testData?.name || '精度测试详情'}
       width={900}
-      open={visible}
+      open={open}
       onClose={onClose}
       maskClosable={false}
       destroyOnClose
@@ -701,19 +700,27 @@ export const AccuracyTestDetail: React.FC<AccuracyTestDetailProps> = ({
               </Descriptions.Item>
             </Descriptions>
 
-            <Tabs activeKey={activeTab} onChange={setActiveTab}>
-              <TabPane tab="评测概览" key="summary">
-                {renderSummary()}
-              </TabPane>
-              <TabPane tab="问题详情" key="items">
-                {renderTestItems()}
-              </TabPane>
-              {(testData.evaluation_type === 'manual' || testData.evaluation_type === 'hybrid') && (
-                <TabPane tab="人工评测任务" key="human">
-                  {renderHumanAssignments()}
-                </TabPane>
-              )}
-            </Tabs>
+            <Tabs 
+              activeKey={activeTab} 
+              onChange={setActiveTab}
+              items={[
+                {
+                  key: 'summary',
+                  label: '评测概览',
+                  children: renderSummary()
+                },
+                {
+                  key: 'items',
+                  label: '问题详情',
+                  children: renderTestItems()
+                },
+                ...(testData.evaluation_type === 'manual' || testData.evaluation_type === 'hybrid' ? [{
+                  key: 'human',
+                  label: '人工评测任务',
+                  children: renderHumanAssignments()
+                }] : [])
+              ]}
+            />
           </>
         ) : (
           <Empty description="未找到测试数据" />

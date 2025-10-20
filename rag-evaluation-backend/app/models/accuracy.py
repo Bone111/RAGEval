@@ -63,7 +63,7 @@ class AccuracyTestItem(Base):
     id = Column(StringUUID, primary_key=True, default=uuid.uuid4)
     evaluation_id = Column(StringUUID, ForeignKey("accuracy_test.id", ondelete="CASCADE"), nullable=False)
     question_id = Column(StringUUID, ForeignKey("questions.id"), nullable=False)
-    rag_answer_id = Column(StringUUID, ForeignKey("rag_answers.id"), nullable=False)
+    rag_answer_id = Column(StringUUID, ForeignKey("rag_answers.id", ondelete="CASCADE"), nullable=False)
     
     # 状态信息
     status = Column(String(20), default="pending")

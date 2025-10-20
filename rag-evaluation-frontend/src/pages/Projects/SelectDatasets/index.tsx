@@ -12,7 +12,6 @@ import styles from './SelectDatasets.module.css';
 
 const { Title, Text, Paragraph } = Typography;
 const { Search } = Input;
-const { TabPane } = Tabs;
 
 const SelectDatasetsPage: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -267,73 +266,84 @@ const SelectDatasetsPage: React.FC = () => {
           />
         </div>
 
-        <Tabs activeKey={activeTab} onChange={handleTabChange}>
-          <TabPane tab="我的数据集" key="my">
-            <div className={styles.datasetsContainer}>
-              {myDatasetsLoading ? (
-                <div className={styles.tabLoading}>
-                  <Spin />
-                </div>
-              ) : myDatasets.length > 0 ? (
-                <>
-                  <Row gutter={[16, 16]}>
-                    {myDatasets.map(dataset => (
-                      <Col xs={24} sm={12} md={8} lg={6} key={dataset.id}>
-                        {renderDatasetCard(dataset)}
-                      </Col>
-                    ))}
-                  </Row>
-                  {myDatasetsTotal > pageSize && (
-                    <div className={styles.pagination}>
-                      <Pagination
-                        current={myDatasetsPage}
-                        pageSize={pageSize}
-                        total={myDatasetsTotal}
-                        onChange={handleMyDatasetsPageChange}
-                        hideOnSinglePage
-                      />
+        <Tabs 
+          activeKey={activeTab} 
+          onChange={handleTabChange}
+          items={[
+            {
+              key: 'my',
+              label: '我的数据集',
+              children: (
+                <div className={styles.datasetsContainer}>
+                  {myDatasetsLoading ? (
+                    <div className={styles.tabLoading}>
+                      <Spin />
                     </div>
+                  ) : myDatasets.length > 0 ? (
+                    <>
+                      <Row gutter={[16, 16]}>
+                        {myDatasets.map(dataset => (
+                          <Col xs={24} sm={12} md={8} lg={6} key={dataset.id}>
+                            {renderDatasetCard(dataset)}
+                          </Col>
+                        ))}
+                      </Row>
+                      {myDatasetsTotal > pageSize && (
+                        <div className={styles.pagination}>
+                          <Pagination
+                            current={myDatasetsPage}
+                            pageSize={pageSize}
+                            total={myDatasetsTotal}
+                            onChange={handleMyDatasetsPageChange}
+                            hideOnSinglePage
+                          />
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <Empty description="暂无数据集" />
                   )}
-                </>
-              ) : (
-                <Empty description="暂无数据集" />
-              )}
-            </div>
-          </TabPane>
-
-          <TabPane tab="公开数据集" key="public">
-            <div className={styles.datasetsContainer}>
-              {publicDatasetsLoading ? (
-                <div className={styles.tabLoading}>
-                  <Spin />
                 </div>
-              ) : publicDatasets.length > 0 ? (
-                <>
-                  <Row gutter={[16, 16]}>
-                    {publicDatasets.map(dataset => (
-                      <Col xs={24} sm={12} md={8} lg={6} key={dataset.id}>
-                        {renderDatasetCard(dataset)}
-                      </Col>
-                    ))}
-                  </Row>
-                  {publicDatasetsTotal > pageSize && (
-                    <div className={styles.pagination}>
-                      <Pagination
-                        current={publicDatasetsPage}
-                        pageSize={pageSize}
-                        total={publicDatasetsTotal}
-                        onChange={handlePublicDatasetsPageChange}
-                        hideOnSinglePage
-                      />
+              )
+            },
+            {
+              key: 'public',
+              label: '公开数据集',
+              children: (
+                <div className={styles.datasetsContainer}>
+                  {publicDatasetsLoading ? (
+                    <div className={styles.tabLoading}>
+                      <Spin />
                     </div>
+                  ) : publicDatasets.length > 0 ? (
+                    <>
+                      <Row gutter={[16, 16]}>
+                        {publicDatasets.map(dataset => (
+                          <Col xs={24} sm={12} md={8} lg={6} key={dataset.id}>
+                            {renderDatasetCard(dataset)}
+                          </Col>
+                        ))}
+                      </Row>
+                      {publicDatasetsTotal > pageSize && (
+                        <div className={styles.pagination}>
+                          <Pagination
+                            current={publicDatasetsPage}
+                            pageSize={pageSize}
+                            total={publicDatasetsTotal}
+                            onChange={handlePublicDatasetsPageChange}
+                            hideOnSinglePage
+                          />
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <Empty description="暂无公开数据集" />
                   )}
-                </>
-              ) : (
-                <Empty description="暂无公开数据集" />
-              )}
-            </div>
-          </TabPane>
-        </Tabs>
+                </div>
+              )
+            }
+          ]}
+        />
 
         <div className={styles.createDatasetLink}>
           <Button

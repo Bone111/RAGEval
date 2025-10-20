@@ -11,13 +11,18 @@
 }
 
 # HTTP配置（本地开发环境）
-http://localhost {
+:80 {
+    # 静态文件代理 - 匹配所有/static路径
+    handle /static/* {
+        reverse_proxy backend:8000
+    }
+    
     # API反向代理 - 匹配所有/api路径
     handle /api/* {
         reverse_proxy backend:8000
     }
     
-    # 静态文件服务
+    # 前端静态文件服务
     handle {
         root * /usr/share/caddy
         file_server
@@ -34,16 +39,21 @@ http://localhost {
 }
 
 # HTTPS配置（生产环境）
-https://localhost {
+:443 {
     # 使用自签名证书（开发环境）
     tls internal
+    
+    # 静态文件代理 - 匹配所有/static路径
+    handle /static/* {
+        reverse_proxy backend:8000
+    }
     
     # API反向代理
     handle /api/* {
         reverse_proxy backend:8000
     }
     
-    # 静态文件服务
+    # 前端静态文件服务
     handle {
         root * /usr/share/caddy
         file_server

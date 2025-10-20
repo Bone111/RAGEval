@@ -703,7 +703,7 @@ export const AccuracyTestsManager: React.FC<AccuracyTestsManagerProps> = ({ proj
       </Modal>
 
       <AccuracyTestDetail
-        visible={detailVisible}
+        open={detailVisible}
         testId={selectedTestId}
         datasets={datasets}
         onClose={() => setDetailVisible(false)}

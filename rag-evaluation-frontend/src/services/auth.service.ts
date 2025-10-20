@@ -273,14 +273,14 @@ class AuthService {
   }
 
   // 重置密码
-  async resetPassword(token: string, newPassword: string): Promise<{ message: string }> {
+  async resetPassword(token: string, email: string, newPassword: string): Promise<{ message: string }> {
     try {
       const response = await fetch('/api/v1/auth/reset-password', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ token, new_password: newPassword }),
+        body: JSON.stringify({ token, email, new_password: newPassword }),
       });
 
       if (!response.ok) {

@@ -15,7 +15,7 @@ import { performanceService } from '@services/performance/performance.service';
 const { Title, Text } = Typography;
 
 interface PerformanceTestDetailProps {
-  visible: boolean; // 为了兼容性保留，实际使用open
+  open: boolean;
   testId: string | null;
   onClose: () => void;
   // datasetInfo?: any; // 从列表页面传入的数据集信息
@@ -24,7 +24,7 @@ interface PerformanceTestDetailProps {
 }
 
 export const PerformanceTestDetail: React.FC<PerformanceTestDetailProps> = ({
-  visible,
+  open,
   testId,
   onClose,
   datasets,
@@ -49,7 +49,7 @@ export const PerformanceTestDetail: React.FC<PerformanceTestDetailProps> = ({
   });
 
   useEffect(() => {
-    if (visible && testId) {
+    if (open && testId) {
       setLoading(true);
 
       // 使用统一的service层调用
@@ -72,7 +72,7 @@ export const PerformanceTestDetail: React.FC<PerformanceTestDetailProps> = ({
           setLoading(false);
         });
     }
-  }, [visible, testId]);
+  }, [open, testId]);
 
   const renderStatusTag = (status: string) => {
     let color = 'default';
@@ -272,7 +272,7 @@ export const PerformanceTestDetail: React.FC<PerformanceTestDetailProps> = ({
       placement="right"
       width={920}
       onClose={onClose}
-      open={visible}
+      open={open}
       destroyOnClose
     >
       {loading ? (

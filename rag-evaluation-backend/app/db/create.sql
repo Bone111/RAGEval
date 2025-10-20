@@ -691,7 +691,8 @@ create table public.accuracy_test_items
     question_id             uuid                                   not null
         references public.questions,
     rag_answer_id           uuid                                   not null
-        references public.rag_answers,
+        references public.rag_answers
+            on delete cascade,
     status                  varchar(20) default 'pending'::character varying
         constraint accuracy_test_items_status_check
             check ((status)::text = ANY

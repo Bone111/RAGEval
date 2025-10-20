@@ -251,7 +251,7 @@ const QuestionListTab: React.FC<QuestionListTabProps> = ({
             }}
           >
             <div className={styles.questionText}>
-              <Tooltip title={text} placement="topLeft" overlayStyle={{ maxWidth: '600px' }}>
+              <Tooltip title={text} placement="topLeft" styles={{ root: { maxWidth: '600px' } }}>
                 <span>{text}</span>
               </Tooltip>
             </div>

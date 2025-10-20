@@ -7,11 +7,10 @@ import TextArea from 'antd/es/input/TextArea';
 import styles from '../DatasetDetail.module.css';
 
 const { Option } = Select;
-const { TabPane } = Tabs;
 const { Text } = Typography;
 
 interface AddQuestionModalProps {
-  visible: boolean;
+  open: boolean;
   onCancel: () => void;
   onSubmit: () => void;
   form: any;
@@ -27,7 +26,7 @@ interface AddQuestionModalProps {
 }
 
 const AddQuestionModal: React.FC<AddQuestionModalProps> = ({
-  visible,
+  open,
   onCancel,
   onSubmit,
   form,
@@ -44,15 +43,21 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({
   return (
     <Modal
       title="添加新问题"
-      visible={visible}
+      open={open}
       onOk={onSubmit}
       onCancel={onCancel}
       width={800}
       okText="添加"
       cancelText="取消"
     >
-      <Tabs defaultActiveKey="single" onChange={(key) => setAddTabMode(key as 'single' | 'batch')}>
-        <TabPane tab="单个添加" key="single">
+      <Tabs 
+        defaultActiveKey="single" 
+        onChange={(key) => setAddTabMode(key as 'single' | 'batch')}
+        items={[
+          {
+            key: 'single',
+            label: '单个添加',
+            children: (
           <Form
             form={form}
             layout="vertical"
@@ -155,10 +160,13 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({
                 </Row>
               </div>
             )}
-          </Form>
-        </TabPane>
-        
-        <TabPane tab="批量添加" key="batch">
+              </Form>
+            )
+          },
+          {
+            key: 'batch',
+            label: '批量添加',
+            children: (
           <div className={styles.batchAddContainer}>
             <div className={styles.batchInstructions}>
               <Typography.Title level={5}>批量添加说明</Typography.Title>
@@ -238,9 +246,11 @@ const AddQuestionModal: React.FC<AddQuestionModalProps> = ({
                 </div>
               </div>
             )}
-          </div>
-        </TabPane>
-      </Tabs>
+            </div>
+            )
+          }
+        ]}
+      />
     </Modal>
   );
 };
