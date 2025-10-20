@@ -76,11 +76,40 @@ const MinerUPanel: React.FC = () => {
   };
 
   const handleCopyKey = async (key: string) => {
+    if (!key) {
+      message.error('没有可复制的内容');
+      return;
+    }
+    
     try {
-      await navigator.clipboard.writeText(key);
-      message.success('密钥已复制到剪贴板');
+      // 优先使用 Clipboard API（仅在安全上下文可用）
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(key);
+        message.success('密钥已复制到剪贴板');
+        return;
+      }
+      
+      // 降级方案：使用 textarea + execCommand
+      const textarea = document.createElement('textarea');
+      textarea.value = key;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      
+      const success = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      
+      if (success) {
+        message.success('密钥已复制到剪贴板');
+      } else {
+        message.warning('自动复制失败，请手动选择复制');
+      }
     } catch (error) {
-      message.error('复制失败');
+      console.error('复制失败:', error);
+      message.error('复制失败，请手动复制');
     }
   };
 
@@ -168,7 +197,6 @@ const MinerUPanel: React.FC = () => {
         style={{ marginBottom: 24 }}
       />
 
-      {console.log('渲染时 defaultConfig:', defaultConfig)}
       <Card title="免费秘钥" style={{ marginBottom: 24 }}>
         <Space direction="vertical" style={{ width: '100%' }}>
           <div>
