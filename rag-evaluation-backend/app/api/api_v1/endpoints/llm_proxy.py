@@ -40,7 +40,7 @@ async def llm_proxy(request: Request):
         resp = await client.post(llm_url, json=payload, headers=headers)
         return JSONResponse(status_code=resp.status_code, content=resp.json())
 
-@router.post("/llm/test")
+@router.post("/test")
 async def test_llm_connection(request: LLMTestRequest):
     """测试LLM连接是否正常"""
     try:
@@ -105,7 +105,7 @@ async def test_llm_connection(request: LLMTestRequest):
             "message": f"测试失败: {str(e)}"
         }
 
-@router.post("/llm/evaluate")
+@router.post("/evaluate")
 async def llm_evaluation(request: LLMEvaluationRequest):
     """精度评测LLM请求代理"""
     try:
