@@ -12,6 +12,7 @@
 import { accuracyService } from './accuracy.service';
 import { accuracyRequestService } from './accuracyRequestService';
 import { AccuracyQuestionBuffer } from './accuracyQuestionBuffer';
+import { api } from '../../utils/api';
 
 /**
  * 测试进度数据结构
@@ -394,6 +395,14 @@ export async function executeAccuracyTest(
 
     console.log('精度测试执行完成，通知后端计算汇总指标');
 
+    // 调用后端完成接口，触发报告生成
+    try {
+      await api.post(`/v1/accuracy/${test.id}/complete`);
+      console.log('精度测试完成通知已发送，报告将自动生成');
+    } catch (error) {
+      console.error('通知后端测试完成失败:', error);
+      // 不抛出错误，因为测试已经完成
+    }
 
     return true;
   } catch (error: any) {

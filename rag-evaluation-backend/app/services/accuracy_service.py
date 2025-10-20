@@ -19,6 +19,7 @@ from app.schemas.accuracy import (
     AccuracyTestItemCreate,
     HumanAssignmentCreate
 )
+from app.services.report_generator_service import ReportGeneratorService
 
 logger = logging.getLogger(__name__)
 
@@ -225,7 +226,7 @@ class AccuracyService:
         
         return test
     
-    def complete_test(self, test_id: uuid.UUID) -> Optional[AccuracyTest]:
+    def complete_test(self, test_id: uuid.UUID, user_id: Optional[uuid.UUID] = None) -> Optional[AccuracyTest]:
         """完成测试并更新结果"""
         test = self.db.query(AccuracyTest).filter(
             AccuracyTest.id == test_id
@@ -246,6 +247,16 @@ class AccuracyService:
         
         self.db.commit()
         self.db.refresh(test)
+        
+        # 自动生成报告
+        if user_id:
+            try:
+                report_generator = ReportGeneratorService(self.db)
+                report = report_generator.generate_accuracy_report(str(test_id), str(user_id))
+                if report:
+                    logger.info(f"自动生成精度评测报告: test_id={test_id}, report_id={report.id}")
+            except Exception as e:
+                logger.error(f"自动生成报告失败: test_id={test_id}, error={str(e)}")
         
         return test
     

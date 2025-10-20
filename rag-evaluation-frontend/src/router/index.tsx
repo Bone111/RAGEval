@@ -3,7 +3,6 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from '../pages/Login';
 import ForgotPassword from '../pages/ForgotPassword';
 import ResetPassword from '../pages/ResetPassword';
-import ChangePassword from '../pages/ChangePassword';
 import Dashboard from '../pages/Dashboard';
 import CreateProject from '../pages/CreateProject';
 import DatasetsPage from '../pages/Datasets';
@@ -15,6 +14,10 @@ import MainLayout from '../components/Layout/MainLayout';
 import { authService } from '../services/auth.service';
 import ProjectDetailPage from '../pages/Projects/ProjectDetail';
 import Settings from '../pages/Settings';
+
+// 报告页面
+import ReportsPage from '../pages/Projects/Reports';
+import ReportDetailPage from '../pages/Projects/Reports/ReportDetail';
 
 // 管理员页面
 import AdminDashboard from '../pages/Admin/Dashboard';
@@ -100,6 +103,16 @@ const AppRouter = () => {
           element={
             <ProtectedRoute>
               <ProjectDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        {/* 移除独立报告列表路由，报告已集成到项目详情页 */}
+        {/* 移除创建报告路由，报告基于评测自动生成 */}
+        <Route
+          path="/projects/:projectId/reports/:reportId"
+          element={
+            <ProtectedRoute>
+              <ReportDetailPage />
             </ProtectedRoute>
           }
         />

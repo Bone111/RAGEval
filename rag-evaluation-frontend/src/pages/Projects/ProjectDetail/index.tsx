@@ -16,6 +16,7 @@ import { api } from '../../../utils/api';
 import styles from './ProjectDetail.module.css';
 import { PerformanceTestsManager } from '../PerformanceTests/PerformanceTestsManager';
 import { AccuracyTestsManager } from '../AccuracyTests/AccuracyTestsManager';
+import ReportsPage from '../Reports';
 
 const { Title, Text, Paragraph } = Typography;
 const { TabPane } = Tabs;
@@ -132,10 +133,7 @@ const ProjectDetailPage: React.FC = () => {
   };
 
 
-  // 查看评测报告
-  const handleViewReports = () => {
-    navigate(`/projects/${id}/reports`);
-  };
+  // 移除handleViewReports函数，报告直接在当前页面显示
 
   if (loading) {
     return (
@@ -323,19 +321,7 @@ const ProjectDetailPage: React.FC = () => {
           <PerformanceTestsManager projectId={id!} />
         </TabPane>
         <TabPane tab="报表" key="reports">
-          <div className={styles.reportsSection}>
-            <div className={styles.sectionHeader}>
-              <Title level={5}>评测报告</Title>
-              <Button
-                type="primary"
-                icon={<BarChartOutlined />}
-                onClick={handleViewReports}
-              >
-                查看报告
-              </Button>
-            </div>
-            <Empty description="暂无评测报告" />
-          </div>
+          <ReportsPage projectId={id} />
         </TabPane>
       </Tabs>
 

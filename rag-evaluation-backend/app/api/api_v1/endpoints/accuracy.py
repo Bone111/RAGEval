@@ -128,7 +128,7 @@ def complete_accuracy_test(
     """完成精度评测"""
     service = AccuracyService(db)
     try:
-        test = service.complete_test(test_id)
+        test = service.complete_test(test_id, current_user.id)
         if not test:
             raise HTTPException(status_code=404, detail="精度评测不存在")
         return test
