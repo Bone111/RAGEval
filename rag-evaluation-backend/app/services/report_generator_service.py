@@ -23,6 +23,14 @@ class ReportGeneratorService:
         if not test or test.status != "completed":
             return None
         
+        # 检查是否已经存在该测试的报告
+        existing_report = self.db.query(Report).filter(
+            Report.config['test_id'].astext == test_id
+        ).first()
+        
+        if existing_report:
+            return existing_report  # 返回已存在的报告
+        
         # 获取项目信息
         project = self.db.query(Project).filter(Project.id == test.project_id).first()
         if not project:
@@ -52,7 +60,7 @@ class ReportGeneratorService:
             user_id=user_id,
             project_id=str(test.project_id),
             config={
-                "test_id": str(test.id),
+                "test_id": str(test.id),  # 关键：存储测试ID用于去重
                 "test_name": test.name,
                 "dataset_id": str(test.dataset_id),
                 "dataset_name": dataset.name,

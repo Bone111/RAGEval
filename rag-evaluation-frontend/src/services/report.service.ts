@@ -22,8 +22,9 @@ export const reportService = {
   },
 
   // 获取报告详情
-  getReport: async (reportId: string): Promise<Report> => {
-    const response = await api.get<Report>(`/v1/reports/${reportId}`);
+  getReport: async (reportId: string, forceRefresh?: boolean): Promise<Report> => {
+    const url = forceRefresh ? `/v1/reports/${reportId}?force_refresh=true` : `/v1/reports/${reportId}`;
+    const response = await api.get<Report>(url);
     return response;
   },
 

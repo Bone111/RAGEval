@@ -8,7 +8,7 @@ import {
   ArrowLeftOutlined, EditOutlined, DeleteOutlined, PlusOutlined,
   BarChartOutlined, ExclamationCircleOutlined
 } from '@ant-design/icons';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { projectService } from '../../../services/project.service';
 import { datasetService } from '../../../services/dataset.service';
 import { Dataset } from '../../../types/dataset';
@@ -25,6 +25,7 @@ const { confirm } = Modal;
 const ProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<any>(null);
@@ -38,6 +39,15 @@ const ProjectDetailPage: React.FC = () => {
       fetchProjectDetail();
     }
   }, [id]);
+
+  // 处理URL参数，设置默认标签页
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const tab = searchParams.get('tab');
+    if (tab && ['overview', 'datasets', 'accuracy', 'performance', 'reports'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [location.search]);
 
 
   const fetchProjectDetail = async () => {

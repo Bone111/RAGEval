@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined, DownloadOutlined,
-  BarChartOutlined
+  BarChartOutlined, ReloadOutlined
 } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
 import { reportService, Report } from '../../../services/report.service';
@@ -25,17 +25,24 @@ const ReportDetailPage: React.FC = () => {
     }
   }, [reportId]);
 
-  const fetchReport = async () => {
+  const fetchReport = async (forceRefresh = false) => {
     setLoading(true);
     try {
-      const data = await reportService.getReport(reportId!);
+      const data = await reportService.getReport(reportId!, forceRefresh || false);
       setReport(data);
+      if (forceRefresh) {
+        message.success('报告内容已更新');
+      }
     } catch (error) {
       console.error('获取报告详情失败:', error);
       message.error('获取报告详情失败');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRefreshReport = () => {
+    fetchReport(true);
   };
 
   const handleExportReport = async () => {
@@ -622,12 +629,19 @@ const ReportDetailPage: React.FC = () => {
         <Button
           type="link"
           icon={<ArrowLeftOutlined />}
-          onClick={() => navigate(`/projects/${projectId}/reports`)}
+          onClick={() => navigate(`/projects/${projectId}?tab=reports`)}
         >
-          返回报告列表
+          返回项目详情
         </Button>
         <Title level={3}>{report.title}</Title>
         <Space>
+          <Button 
+            icon={<ReloadOutlined />}
+            onClick={handleRefreshReport}
+            loading={loading}
+          >
+            刷新数据
+          </Button>
           <Button 
             icon={<DownloadOutlined />}
             onClick={handleExportReport}
